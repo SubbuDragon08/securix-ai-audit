@@ -506,14 +506,28 @@ async function main(): Promise<number> {
   return failed.length === results.length && !config.demo ? 1 : 0;
 }
 
+/**
+ * Set the exit code and let Node terminate on its own.
+ *
+ * Emphatically *not* `process.exit()`: stdout to a pipe is asynchronous, so
+ * exiting immediately after a large `--json` write truncates it at the pipe
+ * buffer (64 KB on Linux/macOS). Falling off the end of the event loop flushes
+ * first. Every handle this tool opens — the loopback listener, retry timers —
+ * is closed or cleared on the way out, so there is nothing left to hold it.
+ */
+const finish = (code: number): void => {
+  process.exitCode = code;
+};
+
 main()
-  .then((code) => process.exit(code))
+  .then(finish)
   .catch((err: unknown) => {
     log.info('');
     if (err instanceof ConfigError) {
-      log.error((err as Error).message);
+      log.error(err.message);
       log.info(style.dim('\n  Run ai-audit-lens --help for the full option list.'));
-      process.exit(2);
+      finish(2);
+      return;
     }
     log.error((err as Error)?.message ?? String(err));
     if (process.env['AI_AUDIT_LENS_DEBUG'] === '1') {
@@ -521,5 +535,5 @@ main()
     } else {
       log.info(style.dim('  Re-run with --verbose, or AI_AUDIT_LENS_DEBUG=1 for a stack trace.'));
     }
-    process.exit(1);
+    finish(1);
   });

@@ -799,12 +799,35 @@ const TEMPLATE = `<!doctype html>
       });
   }
 
+  /**
+   * Replace each canvas with a note when Chart.js could not be fetched.
+   *
+   * Opened on an air-gapped machine the CDN tags fail, and an unguarded
+   * "new Chart(...)" would throw before the table ever rendered — losing the
+   * numbers along with the pictures. The table view is the WCAG-clean twin of
+   * every chart, so it is the half that must survive.
+   */
+  function degradeCharts() {
+    ['volumeChart', 'usersChart', 'appsChart', 'opsChart'].forEach(function (id) {
+      var canvas = document.getElementById(id);
+      if (!canvas || !canvas.parentNode) return;
+      var note = document.createElement('div');
+      note.className = 'ink-3 flex h-full items-center justify-center text-center text-xs';
+      note.textContent = 'Charts need Chart.js, which could not be loaded offline. Every value is in the table below.';
+      canvas.parentNode.replaceChild(note, canvas);
+    });
+  }
+
+  var chartsAvailable = typeof Chart !== 'undefined';
+
   function renderAll() {
     renderKpis(state.view);
-    renderVolume(state.view);
-    renderRanked('users', 'usersChart', state.view, function (r) { return DICT.users[r[1]]; }, 10, false);
-    renderRanked('apps', 'appsChart', state.view, function (r) { return DICT.apps[r[3]]; }, 8, true);
-    renderRanked('ops', 'opsChart', state.view, function (r) { return DICT.ops[r[4]]; }, 8, true);
+    if (chartsAvailable) {
+      renderVolume(state.view);
+      renderRanked('users', 'usersChart', state.view, function (r) { return DICT.users[r[1]]; }, 10, false);
+      renderRanked('apps', 'appsChart', state.view, function (r) { return DICT.apps[r[3]]; }, 8, true);
+      renderRanked('ops', 'opsChart', state.view, function (r) { return DICT.ops[r[4]]; }, 8, true);
+    }
     renderTable();
   }
 
@@ -889,6 +912,7 @@ const TEMPLATE = `<!doctype html>
 
   // ---- boot -------------------------------------------------------------
   document.documentElement.setAttribute('data-theme', currentTheme());
+  if (!chartsAvailable) degradeCharts();
   renderChrome();
   renderBanners();
   populateFilters();

@@ -35,7 +35,7 @@ This tool is asking for audit-read across your whole tenant, so it should have t
 
 | Property | How it is enforced |
 |---|---|
-| **No third-party server** | There is no backend. The only hosts contacted are `login.microsoftonline.com`, `graph.microsoft.com`, `accounts.google.com`, `oauth2.googleapis.com`, and `admin.googleapis.com`. Verify with `--verbose`, or a proxy. |
+| **No third-party server** | There is no backend. The CLI contacts exactly six hosts, all first-party: `login.microsoftonline.com` (or `--ms-authority`), `graph.microsoft.com`, `accounts.google.com`, `oauth2.googleapis.com`, `openidconnect.googleapis.com` (one cosmetic "signed in as" lookup), and `admin.googleapis.com`. Verify with `--verbose` or a proxy. |
 | **No secrets on disk** | Tokens live in process memory and die with the process. `--save-session` opts into a `0600` cache; it is off by default because a Global Admin refresh token on disk is a standing credential, not a one-shot report. |
 | **Read-only scopes** | `AuditLogsQuery.Read.All` and `admin.reports.audit.readonly`. Neither can mutate tenant state. |
 | **PKCE on every flow** | S256 code challenges, constant-time `state` validation, loopback listener bound to `127.0.0.1` and torn down after one callback. |
@@ -45,6 +45,14 @@ This tool is asking for audit-read across your whole tenant, so it should have t
 
 The generated HTML embeds your audit records, so it is written `0600` and should be
 handled with the same rules as the audit log itself.
+
+**One honest caveat about the report:** the HTML loads Tailwind from
+`cdn.tailwindcss.com` and Chart.js from `cdn.jsdelivr.net` when you open it, both pinned
+to exact versions. Your audit data is never sent anywhere — these are inbound script
+fetches — but they are two requests your browser makes to hosts you did not choose. Open
+the file on an air-gapped machine and it still renders: you get the tables, the numbers,
+and the KPI tiles, with the charts absent. If you would rather have no external requests
+at all, vendor both libraries into `TEMPLATE` in [`src/report.ts`](src/report.ts).
 
 ---
 

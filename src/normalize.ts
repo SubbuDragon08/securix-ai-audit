@@ -10,7 +10,8 @@
  *
  * Privacy posture: prompt and response *content* is never mapped into an
  * indexed field. `--include-raw` attaches the untouched provider payload to
- * `raw` for forensics, and the report clearly marks that mode.
+ * `raw` for forensics, which surfaces only in the `--json` stream — the HTML
+ * report is built from the normalised fields alone.
  */
 
 import type { GoogleActivity, GraphAuditRecord } from './fetch.js';
