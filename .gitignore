@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+dist-bin/
+*.tsbuildinfo
+
+# Generated reports may contain tenant data — never commit them.
+ai-audit-report-*.html
+*.report.html
+
+# Local secrets / config
+.env
+.env.local
+.ai-audit-lens/
+
+.DS_Store
