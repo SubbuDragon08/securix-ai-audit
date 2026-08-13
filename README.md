@@ -64,6 +64,72 @@ at all, vendor both libraries into `TEMPLATE` in [`src/report.ts`](src/report.ts
 
 ---
 
+---
+
+## Linux clients
+
+Fully supported. The app is the same Electron binary; only packaging and one
+storage detail differ.
+
+| Format | Arch | Notes |
+|---|---|---|
+| **AppImage** | x64, arm64 | Recommended. `chmod +x` and run — no installation, no root, works on every mainstream distro. |
+| **.deb** | x64, arm64 | Debian, Ubuntu, Mint. Installs a desktop entry. |
+| **.rpm** | x64 | Fedora, RHEL, openSUSE. |
+
+```bash
+chmod +x "SecuriX AI Audit-0.1.0.AppImage"
+./"SecuriX AI Audit-0.1.0.AppImage"
+```
+
+**Building them:** `npm run dist:linux`. On a Linux host that produces all three.
+On macOS or Windows it produces **AppImage only** — `.deb` and `.rpm` are assembled
+by `fpm`, which needs GNU `ar`, and macOS ships the BSD one (`ar failed (exit code
+72)`). For the full set off-Linux, use the official container:
+
+```bash
+docker run --rm -v "$PWD":/project -w /project \
+  electronuserland/builder:wine \
+  /bin/bash -c "npm ci && npm run dist:linux"
+```
+
+### "Stay signed in" needs a keyring
+
+This is the one behavioural difference, and it is deliberate. On macOS and
+Windows, `safeStorage` is backed by Keychain and DPAPI. On Linux it needs
+**gnome-keyring** or **kwallet** via libsecret — and when neither is present,
+Chromium silently falls back to a `basic_text` backend that "encrypts" with a
+*hardcoded key*, while still reporting encryption as available.
+
+Storing a Global Admin refresh token under a hardcoded key is plaintext with
+extra steps, so the app checks the actual backend and **refuses to persist**,
+greying out the checkbox with the reason shown. Tokens stay in memory and die
+with the process — which is the default on every platform anyway.
+
+To enable it:
+
+```bash
+sudo apt install gnome-keyring libsecret-1-0     # Debian/Ubuntu
+sudo dnf install gnome-keyring libsecret         # Fedora/RHEL
+```
+
+The `.deb` lists these under `Recommends`, so most desktop installs get them.
+
+### Other Linux notes
+
+- **Headless servers have no GUI.** Use the CLI there — `--ms-auth device` gives
+  you a code to enter on any other device, which is why device-code flow is the
+  CLI's default.
+- **Sign-in needs a browser.** `xdg-open` is used; the URL is always printed as a
+  fallback if it fails.
+- **AppImage needs FUSE.** Most distros have it; on Ubuntu 22.04+ install
+  `libfuse2` if you get a mount error. Or extract: `./App.AppImage --appimage-extract`.
+- **Sandbox errors** (`SUID sandbox helper`) happen in some containers and minimal
+  distros. `--no-sandbox` works around it but weakens the renderer isolation this
+  app relies on; prefer fixing the host.
+
+---
+
 ## Two ways to run it
 
 ### Desktop app (recommended)
@@ -79,11 +145,15 @@ export SECURIX_ENTRA_CLIENT_ID="<your multi-tenant app id>"   # see DISTRIBUTION
 npm run app          # build + launch
 npm run dist:mac     # -> release/*.dmg
 npm run dist:win     # -> release/*.exe
+npm run dist:linux   # -> release/*.AppImage (+ .deb/.rpm on Linux)
 ```
 
 Without `SECURIX_ENTRA_CLIENT_ID` the app still builds and runs, but shows a
 "not configured" banner and disables Microsoft sign-in. Google onboarding is
 bring-your-own either way — see below for why.
+
+**Just want to try it?** [TESTING.md](TESTING.md) — `npm install && npm run app`, then
+click *Preview with sample data*. No credentials, no `.env`, no network.
 
 **Publishing this as a lead magnet?** [DISTRIBUTION.md](DISTRIBUTION.md) covers the Entra
 registration, code signing and notarization, and the website download flow.

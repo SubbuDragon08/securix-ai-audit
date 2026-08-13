@@ -40,7 +40,7 @@
     "dist": "npm run app:icon && npm run app:build && electron-builder --publish never",
     "dist:mac": "npm run app:icon && npm run app:build && electron-builder --mac --publish never",
     "dist:win": "npm run app:icon && npm run app:build && electron-builder --win --publish never",
-    "dist:linux": "npm run app:icon && npm run app:build && electron-builder --linux --publish never",
+    "dist:linux": "npm run app:icon && npm run app:build && node scripts/build-linux.mjs",
     "cli": "npm run build && node dist/index.js",
     "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
     "bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-cjs/ai-audit-lens.cjs --legal-comments=none",

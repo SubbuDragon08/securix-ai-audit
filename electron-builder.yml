@@ -97,8 +97,7 @@ nsis:
 # ---------------------------------------------------------------------------
 linux:
   icon: build/icon.png
-  # "Security;Network" puts it where an IT admin would look in a desktop menu.
-  category: Utility;Security;Network
+  category: Utility
   synopsis: Audit Microsoft 365 Copilot and Google Gemini prompt activity
   description: >
     Connects to your own Microsoft 365 or Google Workspace tenant with read-only
@@ -107,8 +106,13 @@ linux:
   # Maintainer comes from package.json `author`. .deb and .rpm both refuse to
   # build without it.
   maintainer: SecuriX <support@securix.app>
-  desktopEntry:
-    StartupWMClass: SecuriX AI Audit
+  desktop:
+    entry:
+      # Puts it where an IT admin would look in a desktop menu, and lets the
+      # window manager match the running window back to its launcher icon.
+      Categories: Utility;Security;Network;
+      StartupWMClass: SecuriX AI Audit
+      Keywords: audit;copilot;gemini;compliance;security;
   target:
     - target: AppImage
       arch: [x64, arm64]
