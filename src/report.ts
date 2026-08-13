@@ -53,9 +53,15 @@ interface Payload {
       diagnostics: Record<string, string | number | boolean>;
     }>;
   };
-  dict: { users: string[]; apps: string[]; ops: string[] };
-  /** [timestampMs, userIdx, providerIdx, appIdx, opIdx, ip, resources, labels] */
-  rows: Array<[number, number, number, number, number, string, string[], string[]]>;
+  dict: { users: string[]; apps: string[]; ops: string[]; resources: string[]; labels: string[] };
+  /**
+   * [timestampMs, userIdx, providerIdx, appIdx, opIdx, ip, resourceIdx[], labelIdx[]]
+   *
+   * Resources are interned like every other string. They repeat heavily — a
+   * handful of hot documents account for most groundings in a real tenant — and
+   * inlining them was by far the largest contributor to report size.
+   */
+  rows: Array<[number, number, number, number, number, string, number[], number[]]>;
 }
 
 class Interner {
@@ -81,6 +87,8 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
   const users = new Interner();
   const apps = new Interner();
   const ops = new Interner();
+  const resources = new Interner();
+  const labels = new Interner();
 
   const shown = events.slice(0, maxRows);
   const rows = shown.map((e): Payload['rows'][number] => [
@@ -92,8 +100,8 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
     e.clientIp ?? '',
     // Cap per-row detail: a Copilot answer can ground on dozens of files, and
     // the table only ever shows the first few before "+N more".
-    e.accessedResources.slice(0, 6),
-    e.sensitivityLabels.slice(0, 4),
+    e.accessedResources.slice(0, 6).map((r) => resources.intern(r)),
+    e.sensitivityLabels.slice(0, 4).map((l) => labels.intern(l)),
   ]);
 
   return {
@@ -116,7 +124,13 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
         diagnostics: r.diagnostics,
       })),
     },
-    dict: { users: users.values, apps: apps.values, ops: ops.values },
+    dict: {
+      users: users.values,
+      apps: apps.values,
+      ops: ops.values,
+      resources: resources.values,
+      labels: labels.values,
+    },
     rows,
   };
 }
@@ -418,9 +432,14 @@ const TEMPLATE = `<!doctype html>
   function dayKey(ms) { return new Date(ms).toISOString().slice(0, 10); }
   function fmtTime(ms) { return new Date(ms).toISOString().replace('T', ' ').slice(0, 16); }
 
+  /** Resources and labels are interned; expand on demand. */
+  function resourcesOf(r) { return r[6].map(function (i) { return DICT.resources[i]; }); }
+  function labelsOf(r) { return r[7].map(function (i) { return DICT.labels[i]; }); }
+
   function rowText(r) {
     return (DICT.users[r[1]] + ' ' + PROVIDER_LABELS[r[2]] + ' ' + DICT.apps[r[3]] + ' ' +
-            DICT.ops[r[4]] + ' ' + r[5] + ' ' + r[6].join(' ') + ' ' + r[7].join(' ')).toLowerCase();
+            DICT.ops[r[4]] + ' ' + r[5] + ' ' + resourcesOf(r).join(' ') + ' ' +
+            labelsOf(r).join(' ')).toLowerCase();
   }
 
   // ---- filtering --------------------------------------------------------
@@ -711,13 +730,13 @@ const TEMPLATE = `<!doctype html>
     document.getElementById('tableBody').innerHTML = slice.length === 0
       ? '<tr><td colspan="6" class="ink-3 px-5 py-10 text-center">No interactions match these filters.</td></tr>'
       : slice.map(function (r) {
-          var resources = r[6];
+          var resources = resourcesOf(r);
           var extra = '';
           if (resources.length > 3) extra = ' <span class="ink-3">+' + (resources.length - 3) + ' more</span>';
           var cells = resources.slice(0, 3).map(function (x) {
             return '<span class="chip">' + esc(x) + '</span>';
           }).join(' ');
-          var labels = r[7].map(function (x) {
+          var labels = labelsOf(r).map(function (x) {
             return '<span class="chip" style="border-color:var(--status-critical);color:var(--status-critical)">' + esc(x) + '</span>';
           }).join(' ');
           return '<tr class="border-b rule align-top">' +
@@ -854,7 +873,7 @@ const TEMPLATE = `<!doctype html>
       var r = rows[i];
       lines.push([
         new Date(r[0]).toISOString(), DICT.users[r[1]], PROVIDER_LABELS[r[2]],
-        DICT.apps[r[3]], DICT.ops[r[4]], r[5], r[6].join('; '), r[7].join('; ')
+        DICT.apps[r[3]], DICT.ops[r[4]], r[5], resourcesOf(r).join('; '), labelsOf(r).join('; ')
       ].map(csvCell).join(','));
     }
     var blob = new Blob([lines.join('\\r\\n')], { type: 'text/csv;charset=utf-8' });

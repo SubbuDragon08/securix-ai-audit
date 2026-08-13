@@ -131,17 +131,26 @@ async function runMicrosoft(
       signal: hooks.signal,
     });
 
+    const rawCount = fetched.records.length;
     result.events = normalizeMicrosoft(fetched.records, { includeRaw: config.includeRaw });
+
+    // Release the raw Purview records now that normalisation is done. They are
+    // the fattest thing in the process — measured at ~4 KB each once auditData
+    // is included — and holding them alongside the normalised events roughly
+    // doubles peak memory on a large tenant for no benefit. Skipped when
+    // --include-raw, because there the events still reference them.
+    if (!config.includeRaw) fetched.records.length = 0;
+
     result.truncated = fetched.truncated;
     result.warnings = fetched.warnings;
     result.diagnostics = {
       queryId: fetched.queryId,
-      rawRecords: fetched.records.length,
+      rawRecords: rawCount,
       queryWaitSeconds: fetched.queryWaitSeconds,
       operations: ms.operations.join(', '),
     };
 
-    const dropped = fetched.records.length - result.events.length;
+    const dropped = rawCount - result.events.length;
     if (dropped > 0) {
       result.warnings.push(`${dropped} record(s) had no usable timestamp and were excluded.`);
     }
