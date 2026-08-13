@@ -102,7 +102,7 @@ not frozen. **Cancel** aborts immediately.
 ```bash
 npm run dist:mac      # -> release/*.dmg
 npm run dist:win      # -> release/*.exe   (build on Windows for best results)
-npm run dist:linux    # -> release/*.AppImage
+npm run dist:linux    # -> release/*.AppImage + *.deb (needs `brew install binutils` on macOS)
 ```
 
 Unsigned local builds will be blocked by Gatekeeper on macOS. To test one anyway:
@@ -153,4 +153,5 @@ AI_AUDIT_LENS_DEBUG=1 npm run cli -- ...   # full stack traces
 | **Connect Google** stays greyed out | The client ID field is empty. It enables as soon as you type. |
 | **Stay signed in** is greyed out | Linux without a keyring — see the Linux notes in the README. |
 | Changed `.env`, nothing happened | Rebuild: `npm run app` (not a bare `electron` invocation). |
-| `ar failed (exit code 72)` | Building `.deb`/`.rpm` on macOS. `npm run dist:linux` now builds AppImage only off-Linux; use Docker for the rest. |
+| `ar failed (exit code 72)` | macOS BSD `ar`. `brew install binutils` unlocks `.deb`; the build script finds it automatically. |
+| `.rpm` skipped on macOS | Expected. Homebrew's rpm has no Linux platform definitions, so it cannot cross-build. Use Linux or Docker; AppImage covers RHEL/Fedora meanwhile. |

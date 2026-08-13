@@ -105,7 +105,7 @@ linux:
     Runs entirely on this machine; no data is sent anywhere.
   # Maintainer comes from package.json `author`. .deb and .rpm both refuse to
   # build without it.
-  maintainer: SecuriX <support@securix.app>
+  maintainer: SecuriX <subramanyan.b@catalystops.in>
   desktop:
     entry:
       # Puts it where an IT admin would look in a desktop menu, and lets the

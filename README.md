@@ -82,16 +82,38 @@ chmod +x "SecuriX AI Audit-0.1.0.AppImage"
 ./"SecuriX AI Audit-0.1.0.AppImage"
 ```
 
-**Building them:** `npm run dist:linux`. On a Linux host that produces all three.
-On macOS or Windows it produces **AppImage only** — `.deb` and `.rpm` are assembled
-by `fpm`, which needs GNU `ar`, and macOS ships the BSD one (`ar failed (exit code
-72)`). For the full set off-Linux, use the official container:
+**Building them:** `npm run dist:linux`. The script probes the host toolchain and
+builds whatever it can, reporting what it picked:
+
+| Host | AppImage | .deb | .rpm |
+|---|---|---|---|
+| Linux | yes | yes | yes |
+| macOS + `brew install binutils` | yes | yes | no |
+| macOS, nothing extra | yes | no | no |
+
+`.deb` and `.rpm` are assembled by `fpm`, which shells out to GNU `ar`. macOS ships
+the BSD one, which fails with `ar failed (exit code 72)`:
+
+```bash
+brew install binutils     # unlocks .deb on macOS
+```
+
+Homebrew keeps binutils keg-only, so the build script prepends it to `PATH` for the
+child process only — no shell profile is touched.
+
+**`.rpm` cannot be cross-built from macOS at all.** Homebrew's `rpm` ships only
+`*-darwin` platform definitions, so `rpmbuild --target x86_64-unknown-linux` fails
+with `No compatible architectures found for build`. Installing `rpm` does not help;
+the build script detects this and skips the target rather than failing the run.
+Build `.rpm` on Linux, or in the official container:
 
 ```bash
 docker run --rm -v "$PWD":/project -w /project \
   electronuserland/builder:wine \
   /bin/bash -c "npm ci && npm run dist:linux"
 ```
+
+AppImage already covers Fedora, RHEL, and openSUSE users in the meantime.
 
 ### "Stay signed in" needs a keyring
 
