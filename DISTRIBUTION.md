@@ -8,6 +8,130 @@ signing is the single most common way a tool like this dies in evaluation.
 
 ---
 
+## 0. Make sure you have an Entra tenant  *(do this first)*
+
+**Check before anything else.** This is unauthenticated and takes a second:
+
+```bash
+curl -s "https://login.microsoftonline.com/YOURDOMAIN/v2.0/.well-known/openid-configuration" \
+  | head -c 120
+```
+
+- JSON containing `issuer` → you have a tenant, skip to step 1.
+- `AADSTS90002: Tenant not found` → **you have no tenant yet.** Create one below.
+
+As of this writing, neither `catalystops.in` nor `securix.app` is backed by Entra,
+and signing into the Entra portal with a **personal** Microsoft account
+(`@outlook.com`, `@hotmail.com`, `@live.com`) fails with:
+
+```
+AADSTS16000: User account ... from identity provider 'live.com' does not exist
+in tenant 'Microsoft Services' and cannot access the application ... (ADIbizaUX)
+```
+
+That error is the Entra portal itself refusing to load, not a problem with any
+app registration. A personal Microsoft account has no directory to administer.
+
+### Pick a tenant strategy
+
+| Option | Cost | Good for |
+|---|---|---|
+| **A. Free Entra ID tenant** | Free forever | Getting the app registration done today. Entra ID Free includes unlimited app registrations. **Recommended to start.** |
+| **B. Microsoft 365 Business on `securix.app`** | ~$6–22/user/mo, 1 month free | The proper long-term publisher identity, and a prerequisite for publisher verification. Business Premium also includes Purview Audit, so you can test the Microsoft path against your own tenant. |
+| **C. M365 Developer Program** | Free | Now gated behind a Visual Studio Professional/Enterprise subscription or another qualifying program — not open to everyone any more. |
+
+You can start with A and migrate to B later, but note the client id is tied to the
+tenant that owns it: moving means a new client id and every customer re-consents.
+If you expect SecuriX to be the shipping publisher name, B is worth doing before
+you publish the download link.
+
+### First, identify what your account actually is
+
+A personal Microsoft account can be created with **any** email address, including a
+corporate-looking one. `subramanyan.b@catalystops.in` is exactly that: a personal
+account wearing a work address. It has no directory, which is why both the Entra
+admin center *and* `portal.azure.com` reject it:
+
+```
+Selected user account does not exist in tenant 'Microsoft Services'
+and cannot access the application 'c44b4083-...' (Azure Portal)
+```
+
+Confirm for any address:
+
+```bash
+curl -s -X POST "https://login.microsoftonline.com/common/GetCredentialType" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"you@yourdomain.com"}' | python3 -m json.tool | grep -E "IfExistsResult|DomainType"
+```
+
+| `IfExistsResult` | Meaning |
+|---|---|
+| `0` + `DomainType: 3` | Real work account in an Entra tenant. Skip to step 1. |
+| `5` | **Personal Microsoft account only.** No directory. You must create a tenant. |
+| `1` | No such account anywhere. |
+
+Visiting `portal.azure.com` does **not** reliably auto-provision a directory for a
+personal account any more. You need a signup flow that explicitly creates a tenant,
+and both of those require a card for identity verification.
+
+### Option A — Microsoft 365 Business Basic on `securix.app` (recommended)
+
+Creates a real tenant, a real work admin account, and the publisher identity you
+actually want on customer consent screens. ~$6/user/month, first month free.
+
+1. Open an **InPrivate / Incognito** window (a signed-in personal account is what
+   produced the errors above, and browsers cling to it).
+2. Go to **[microsoft.com/microsoft-365/business](https://www.microsoft.com/en-in/microsoft-365/business/microsoft-365-business-basic)**
+   → **Try free for one month**.
+3. When asked for an email, enter one you control on **`securix.app`**. Microsoft
+   will say it needs to create an account — that is what you want.
+4. Create the admin user, e.g. `admin@securixapp.onmicrosoft.com`. **Do not try to
+   reuse the personal account.**
+5. Complete signup. You are now Global Administrator of a new tenant.
+6. Later, add `securix.app` as a **custom domain** (Entra → Custom domain names →
+   add a DNS TXT record) so consent screens and admin logins use the product domain.
+
+Then `https://login.microsoftonline.com/securixapp.onmicrosoft.com/v2.0/.well-known/openid-configuration`
+returns JSON, `entra.microsoft.com` opens normally with the new admin account, and
+step 1 works as written.
+
+> Consider **Business Premium** (~$22/user/month) instead if you want to test the
+> Microsoft path against your own tenant — it includes Purview Audit, which Basic
+> does not.
+
+### Option B — Azure free account (no Microsoft 365)
+
+Cheaper if you only need the app registration and nothing else.
+
+1. InPrivate window → **[azure.microsoft.com/free](https://azure.microsoft.com/free)**.
+2. Sign in with the personal Microsoft account and complete signup. A card is
+   required for identity verification; the Entra ID Free tier used here costs
+   nothing and app registrations are unlimited.
+3. Signup provisions a **Default Directory** — the tenant you were missing.
+4. Go to **[portal.azure.com](https://portal.azure.com)** → search **Microsoft Entra
+   ID**. It now loads.
+5. *(Recommended)* Rename the directory to `SecuriX` and create a native admin
+   (`admin@<something>.onmicrosoft.com`) rather than administering as the personal
+   account.
+
+The tradeoff: the tenant is a generic `*.onmicrosoft.com` directory, so it is a
+weaker publisher identity than Option A. The client id is tied to whichever tenant
+creates it — migrating later means a new client id and every customer re-consents.
+
+### A note on testing with real data
+
+A brand-new tenant has no Copilot activity, so the Microsoft side will connect
+successfully and return **zero records**. That is correct behaviour, not a bug.
+
+To see real Copilot data you need a tenant with Purview Audit (E3/E5 or Business
+Premium) *and* Copilot licences with actual usage. In practice the cheapest route
+is a design-partner customer running it against their own tenant — which is also
+the intended use of the tool. Until then, **Preview with sample data** exercises
+the full pipeline.
+
+---
+
 ## 1. Register the SecuriX multi-tenant app  *(required — 10 minutes)*
 
 This is what turns a seven-step wizard into one click. You register once; every
