@@ -13,49 +13,159 @@ signing is the single most common way a tool like this dies in evaluation.
 This is what turns a seven-step wizard into one click. You register once; every
 admin who downloads the app just consents to it.
 
-1. [Entra admin center](https://entra.microsoft.com) → **App registrations** → **New registration**.
-2. **Name:** `SecuriX AI Audit`. This string is what admins see on the consent
-   screen, so it should look like something a CISO would approve.
-3. **Supported account types:** *Accounts in any organizational directory
-   (Any Microsoft Entra ID tenant — Multitenant)*. This is the setting that makes
-   it work for other people's tenants; single-tenant is the default and is wrong here.
-4. **Redirect URI:** platform **Mobile and desktop applications**, value
-   `http://localhost`. Entra allows any port on a `http://localhost` reply URL for
-   public clients, which is why the app can bind an ephemeral port and never
-   collide with something already on 3000.
-5. **API permissions** → Microsoft Graph → **Delegated** → `AuditLogsQuery.Read.All` → Add.
-6. **Authentication** → **Allow public client flows** → **Yes** → Save.
-   (No client secret. A distributed desktop app cannot keep one, and Entra
-   public clients must not have one.)
-7. **Branding & properties** → set the logo, publisher, and a link to
-   `https://securix.app`. Consider [publisher verification](https://learn.microsoft.com/entra/identity-platform/publisher-verification-overview) —
-   it puts a blue "Verified" badge on the consent screen and materially raises
-   the number of admins who click Accept.
-8. Copy the **Application (client) ID**.
+### Before you start
 
-Then build with it baked in:
+- **Which tenant?** Whichever Entra tenant you control long-term — this
+  registration becomes your permanent publisher identity. Every customer consent
+  screen will name it, and moving it later means every customer re-consents.
+- **What role?** Application Developer or higher. Global Administrator is not
+  required to create it (only to consent in a given tenant).
+- **No Azure subscription needed.** App registrations are free and live in Entra,
+  not in a subscription.
+
+### Path A — Portal (recommended; no tooling required)
+
+1. Sign in to **[entra.microsoft.com](https://entra.microsoft.com)** with your
+   SecuriX/Catalyst Ops tenant account.
+
+2. **Applications** → **App registrations** → **+ New registration**.
+
+3. **Name:** `SecuriX AI Audit`
+   This exact string is what admins see on the consent screen. Make it look like
+   something a CISO would approve.
+
+4. **Supported account types:** select
+   **Accounts in any organizational directory (Any Microsoft Entra ID tenant — Multitenant)**
+
+   > This is the whole point and it is **not** the default. "Single tenant" — the
+   > preselected option — produces an app that works only in your own tenant and
+   > fails for every customer with `AADSTS50020`.
+   >
+   > Do **not** pick the "…and personal Microsoft accounts" variant: a personal
+   > account can never hold a tenant audit role, so it only creates confusing
+   > failures.
+
+5. **Redirect URI:** leave blank here. **Register**.
+
+6. On the **Overview** page, copy **Application (client) ID**. That GUID is your
+   `SECURIX_ENTRA_CLIENT_ID`.
+
+7. **Authentication** → **+ Add a platform** → **Mobile and desktop applications**
+   → tick the custom URI box and enter exactly:
+
+   ```
+   http://localhost
+   ```
+
+   No port, no path. Entra allows any port at runtime on a `http://localhost`
+   reply URL for public clients, which is why the app can bind an ephemeral port
+   and never collide with something already using 3000.
+
+8. Still on **Authentication**, scroll to **Advanced settings** →
+   **Allow public client flows** → **Yes** → **Save**.
+
+   > The single most commonly missed step. Without it, sign-in fails with
+   > `AADSTS7000218` / "client_assertion or client_secret".
+
+9. **API permissions** → **+ Add a permission** → **Microsoft Graph** →
+   **Delegated permissions** → search `AuditLogsQuery` → tick
+   **AuditLogsQuery.Read.All** → **Add permissions**.
+
+   Then remove the default `User.Read` if present — this app does not need it,
+   and a shorter consent screen converts better.
+
+10. *(Optional but worth it)* **Branding & properties** → add your logo, publisher
+    name, and `https://securix.app`. Then complete
+    [publisher verification](https://learn.microsoft.com/entra/identity-platform/publisher-verification-overview)
+    to get the blue **Verified** badge on the consent screen. It measurably raises
+    the number of admins who click Accept.
+
+### Path B — Azure CLI (faster, scriptable)
+
+Not installed on your machine as of writing: `brew install azure-cli` first.
 
 ```bash
-export SECURIX_ENTRA_CLIENT_ID="<the guid you just copied>"
-npm run dist:mac
+az login
+
+# Delegated AuditLogsQuery.Read.All on Microsoft Graph.
+# Graph resource app id is the same in every tenant.
+GRAPH_APP_ID=00000003-0000-0000-c000-000000000000
+SCOPE_ID=1d9e7ac3-0eca-442c-82f9-e92625af6e6d
+
+# Verify that GUID against your own tenant before trusting it:
+az ad sp show --id "$GRAPH_APP_ID" \
+  --query "oauth2PermissionScopes[?value=='AuditLogsQuery.Read.All'].{id:id,value:value}" -o table
+
+az ad app create \
+  --display-name "SecuriX AI Audit" \
+  --sign-in-audience AzureADMultipleOrgs \
+  --is-fallback-public-client true \
+  --public-client-redirect-uris "http://localhost" \
+  --required-resource-accesses "[{\"resourceAppId\":\"$GRAPH_APP_ID\",\"resourceAccess\":[{\"id\":\"$SCOPE_ID\",\"type\":\"Scope\"}]}]" \
+  --query appId -o tsv
 ```
 
-Until that variable is set, the app builds and runs but shows a "This build is
-not configured" banner and disables Microsoft sign-in — deliberately, so a
-misbuilt binary fails loudly at your desk instead of silently at a customer's.
+The printed `appId` is your `SECURIX_ENTRA_CLIENT_ID`.
+
+### Verify the registration is actually correct
+
+Two settings silently break everything if wrong. Check both:
+
+```bash
+az ad app show --id <YOUR_CLIENT_ID> \
+  --query "{audience:signInAudience, publicClient:isFallbackPublicClient, redirects:publicClient.redirectUris}"
+```
+
+Expect:
+
+```json
+{
+  "audience": "AzureADMultipleOrgs",
+  "publicClient": true,
+  "redirects": ["http://localhost"]
+}
+```
+
+In the portal instead: **Overview** should read *"Supported account types: Multiple
+organizations"*, and **Authentication** should show **Allow public client flows: Yes**.
+
+### Use it
+
+```bash
+cd "/Users/subramanyanbalakrishnan/VS Code/FreeTool"
+cp .env.example .env
+# set SECURIX_ENTRA_CLIENT_ID=<the guid>
+npm run app
+```
+
+The amber "not configured" banner disappears and **Connect Microsoft 365** becomes
+clickable. The client id is inlined at build time, so `.env` changes need a
+rebuild — `npm run app` does that for you.
+
+### Test it against a tenant that is not yours
+
+Your own tenant will succeed even if you accidentally left the app single-tenant,
+because the app is *registered* there. The multi-tenant path is only proven by a
+second tenant — a customer, a partner, or a free
+[Microsoft 365 developer tenant](https://developer.microsoft.com/microsoft-365/dev-program).
 
 ### What the admin sees
 
 > **SecuriX AI Audit** wants to
-> *Read audit log data* — Allows the app to read and query audit log data on your behalf.
+> *Read audit logs data from all services* — Allows the app to read and query
+> audit logs from all services, on behalf of the signed-in user.
 > ☐ Consent on behalf of your organization
 > **[Accept]  [Cancel]**
 
+Because `AuditLogsQuery.Read.All` requires admin consent, only a Global
+Administrator or Privileged Role Administrator can accept. Note that consenting
+grants the app the permission; the signed-in user still needs an audit role
+(Audit Reader / Audit Manager / Global Reader) for queries to return data.
+
 ### If admins report `AADSTS65001` or "need admin approval"
 
-Their tenant has user consent disabled, so someone with Privileged Role
-Administrator must grant tenant-wide. Send them this URL with your client id
-substituted:
+Their tenant has user consent disabled, so an admin must grant tenant-wide. Send
+them this URL with your client id substituted:
 
 ```
 https://login.microsoftonline.com/organizations/v2.0/adminconsent
@@ -65,6 +175,16 @@ https://login.microsoftonline.com/organizations/v2.0/adminconsent
 ```
 
 `src/brand.ts` exports `adminConsentUrl()` which builds exactly this.
+
+### Common failures
+
+| Error | Cause |
+|---|---|
+| `AADSTS50020` user account from identity provider does not exist in tenant | App is single-tenant. Set **signInAudience** to `AzureADMultipleOrgs`. |
+| `AADSTS7000218` request body must contain `client_assertion` or `client_secret` | **Allow public client flows** is still **No**. |
+| `AADSTS50011` redirect URI mismatch | `http://localhost` missing from the **Mobile and desktop applications** platform, or added under **Web** by mistake. |
+| `AADSTS65001` consent required | Expected in tenants with user consent disabled — use the admin consent URL above. |
+| Sign-in works, Purview returns 403 | Consent is fine; the account lacks an audit role. Grant Audit Reader in Purview. |
 
 ---
 
