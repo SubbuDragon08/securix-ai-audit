@@ -1,7 +1,7 @@
 {
   "name": "ai-audit-lens",
   "version": "0.1.0",
-  "description": "Zero-trust local CLI that pulls Microsoft 365 Copilot and Google Gemini prompt audit logs from your own tenant and renders a single-file HTML dashboard. Nothing leaves the machine.",
+  "description": "Zero-trust local desktop app and CLI that pulls Microsoft 365 Copilot and Google Gemini prompt audit logs from your own tenant and renders a single-file HTML dashboard. Nothing leaves the machine.",
   "keywords": [
     "copilot",
     "gemini",
@@ -13,32 +13,48 @@
     "compliance"
   ],
   "license": "MIT",
+  "author": {
+    "name": "SecuriX",
+    "email": "support@securix.app",
+    "url": "https://securix.app"
+  },
+  "homepage": "https://securix.app",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "engines": {
     "node": ">=20.10.0"
   },
   "bin": {
     "ai-audit-lens": "dist/index.js"
   },
-  "main": "dist/index.js",
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "dev": "node --experimental-strip-types src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
-    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=build/ai-audit-lens.cjs --legal-comments=none",
+    "app": "npm run app:build && node scripts/start-app.mjs",
+    "app:build": "node scripts/build-app.mjs",
+    "app:icon": "node scripts/make-icon.mjs",
+    "dist": "npm run app:icon && npm run app:build && electron-builder --publish never",
+    "dist:mac": "npm run app:icon && npm run app:build && electron-builder --mac --publish never",
+    "dist:win": "npm run app:icon && npm run app:build && electron-builder --win --publish never",
+    "dist:linux": "npm run app:icon && npm run app:build && electron-builder --linux --publish never",
+    "cli": "npm run build && node dist/index.js",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-cjs/ai-audit-lens.cjs --legal-comments=none",
     "build:bun": "bun build src/index.ts --compile --minify --target=bun --outfile dist-bin/ai-audit-lens",
     "build:bun:all": "node scripts/build-binaries.mjs",
+    "dev": "node --experimental-strip-types src/index.ts",
     "prepublishOnly": "npm run build",
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true});require('fs').rmSync('build',{recursive:true,force:true});require('fs').rmSync('dist-bin',{recursive:true,force:true})\""
+    "clean": "node -e \"['dist','dist-cjs','dist-bin','dist-electron','release'].forEach(p=>require('fs').rmSync(p,{recursive:true,force:true}))\""
   },
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.24.2",
     "typescript": "^5.7.2"
   }

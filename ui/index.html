@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  Strict CSP. Note what is absent: there is no `connect-src`, so the renderer
+  cannot make a network request of any kind. Every outbound call in this app
+  happens in the main process against a fixed host list. `default-src 'self'`
+  with no 'unsafe-inline' for scripts means the UI logic must live in app.js,
+  which is exactly where we want it.
+-->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuriX AI Audit</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="drag-strip"></div>
+
+<main class="shell">
+
+  <!-- ===================== Header ===================== -->
+  <header class="head">
+    <div class="head-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="30" height="30">
+        <path d="M16 3 5 7.6v8.1c0 6.8 4.6 12.2 11 13.9 6.4-1.7 11-7.1 11-13.9V7.6L16 3Z"
+              fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M11 16.2l3.4 3.4L21.4 13" fill="none" stroke="currentColor"
+              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="head-text">
+      <h1>AI Prompt Audit</h1>
+      <p class="muted" id="tagline">See which employees are sending company data to Copilot and Gemini.</p>
+    </div>
+    <button class="link-btn" id="aboutBtn" type="button">About</button>
+  </header>
+
+  <!-- ===================== Setup warning ===================== -->
+  <section class="notice notice-warn" id="setupNotice" hidden>
+    <strong>This build is not configured.</strong>
+    <span>No Entra application id was compiled in, so Microsoft sign-in cannot work.
+      See <em>Registering the SecuriX multi-tenant app</em> in the README.</span>
+  </section>
+
+  <!-- ===================== Step 1: connect ===================== -->
+  <section class="step" id="connectStep">
+    <div class="step-head">
+      <span class="step-num">1</span>
+      <div>
+        <h2>Connect your tenant</h2>
+        <p class="muted">You sign in on Microsoft's or Google's own page. This app never sees your password.</p>
+      </div>
+    </div>
+
+    <div class="cards">
+      <!-- Microsoft -->
+      <article class="card" id="msCard">
+        <div class="card-top">
+          <svg class="logo" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="9.6" height="9.6" fill="#f25022"/>
+            <rect x="12.9" y="1.5" width="9.6" height="9.6" fill="#7fba00"/>
+            <rect x="1.5" y="12.9" width="9.6" height="9.6" fill="#00a4ef"/>
+            <rect x="12.9" y="12.9" width="9.6" height="9.6" fill="#ffb900"/>
+          </svg>
+          <div>
+            <h3>Microsoft 365</h3>
+            <p class="muted small">Copilot interactions via Purview</p>
+          </div>
+          <span class="pill" id="msPill">Not connected</span>
+        </div>
+        <p class="card-note muted small" id="msNote">
+          Requires an account with Audit Reader, Audit Manager, or Global Reader.
+        </p>
+        <div class="card-actions">
+          <button class="btn btn-primary" id="msConnect" type="button">Connect Microsoft 365</button>
+          <button class="btn btn-ghost" id="msDisconnect" type="button" hidden>Sign out</button>
+        </div>
+        <p class="card-error" id="msError" hidden></p>
+      </article>
+
+      <!-- Google -->
+      <article class="card" id="gCard">
+        <div class="card-top">
+          <svg class="logo" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path fill="#4285f4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.6Z"/>
+            <path fill="#34a853" d="M12 23.5c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.7v3C3.6 21 7.5 23.5 12 23.5Z"/>
+            <path fill="#fbbc05" d="M5.6 14.2a6.9 6.9 0 0 1 0-4.4v-3H1.7a11.5 11.5 0 0 0 0 10.4l3.9-3Z"/>
+            <path fill="#ea4335" d="M12 5.1c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.6 15.1.5 12 .5 7.5.5 3.6 3 1.7 6.8l3.9 3C6.5 7.1 9 5.1 12 5.1Z"/>
+          </svg>
+          <div>
+            <h3>Google Workspace</h3>
+            <p class="muted small">Gemini activity via Admin SDK</p>
+          </div>
+          <span class="pill" id="gPill">Not connected</span>
+        </div>
+        <p class="card-note muted small">
+          Requires a Super Admin account and a one-time OAuth client in your own Google Cloud project.
+        </p>
+        <details class="setup" id="gSetup">
+          <summary>Google setup <span class="muted small">(one time, ~2 minutes)</span></summary>
+          <ol class="steps">
+            <li>Open <button class="inline-link" data-external="https://console.cloud.google.com" type="button">Google Cloud Console</button> and pick a project.</li>
+            <li>Enable the <strong>Admin SDK API</strong>.</li>
+            <li>OAuth consent screen &rarr; <strong>Internal</strong>, add scope <code>admin.reports.audit.readonly</code>.</li>
+            <li>Credentials &rarr; OAuth client ID &rarr; <strong>Desktop app</strong>.</li>
+            <li>Paste the two values below.</li>
+          </ol>
+          <label class="field-label" for="gClientId">Client ID</label>
+          <input class="field" id="gClientId" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="000000000000-xxxx.apps.googleusercontent.com">
+          <label class="field-label" for="gClientSecret">Client secret</label>
+          <input class="field" id="gClientSecret" type="password" spellcheck="false" autocomplete="off"
+                 placeholder="GOCSPX-...">
+          <p class="muted small">
+            Stored locally in this app's settings. Google does not treat installed-app
+            secrets as confidential.
+          </p>
+        </details>
+        <div class="card-actions">
+          <button class="btn btn-primary" id="gConnect" type="button">Connect Google Workspace</button>
+          <button class="btn btn-ghost" id="gDisconnect" type="button" hidden>Sign out</button>
+        </div>
+        <p class="card-error" id="gError" hidden></p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== Step 2: options + run ===================== -->
+  <section class="step" id="runStep">
+    <div class="step-head">
+      <span class="step-num">2</span>
+      <div>
+        <h2>Generate the report</h2>
+        <p class="muted">Everything is fetched and rendered on this machine.</p>
+      </div>
+    </div>
+
+    <div class="options">
+      <div class="opt">
+        <label class="field-label" for="daysSelect">History window</label>
+        <select class="field" id="daysSelect">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="pseudoCheck">
+        <span>
+          <strong>Pseudonymise users</strong>
+          <span class="muted small">Replace names with aliases and drop IPs. For works councils and GDPR reviews.</span>
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="stayCheck">
+        <span>
+          <strong>Stay signed in</strong>
+          <span class="muted small" id="stayNote">Store the refresh token in your OS keychain. Off means it dies when you quit.</span>
+        </span>
+      </label>
+    </div>
+
+    <div class="run-row">
+      <button class="btn btn-run" id="runBtn" type="button" disabled>Generate report</button>
+      <button class="btn btn-ghost" id="demoBtn" type="button">Preview with sample data</button>
+    </div>
+    <p class="muted small" id="runHint">Connect a platform above to continue.</p>
+  </section>
+
+  <!-- ===================== Progress ===================== -->
+  <section class="step" id="progressStep" hidden>
+    <div class="step-head">
+      <span class="step-num spin" id="progressSpinner"></span>
+      <div>
+        <h2 id="progressTitle">Collecting audit logs</h2>
+        <p class="muted" id="progressDetail">Starting&hellip;</p>
+      </div>
+      <button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button>
+    </div>
+    <div class="notice notice-info" id="purviewNotice" hidden>
+      <strong>Microsoft's audit search runs server-side.</strong>
+      <span>Purview commonly takes 5&ndash;20 minutes on large tenants. This window can stay open.</span>
+    </div>
+    <pre class="console" id="console" aria-live="polite"></pre>
+  </section>
+
+  <!-- ===================== Result ===================== -->
+  <section class="step result" id="resultStep" hidden>
+    <div class="result-head">
+      <div class="result-badge" id="resultBadge">&#10003;</div>
+      <div>
+        <h2 id="resultTitle">Report ready</h2>
+        <p class="muted" id="resultSummary"></p>
+      </div>
+    </div>
+    <div class="notice notice-warn" id="resultWarn" hidden></div>
+    <div class="run-row">
+      <button class="btn btn-run" id="openBtn" type="button">Open report</button>
+      <button class="btn btn-ghost" id="saveAsBtn" type="button">Save a copy&hellip;</button>
+      <button class="btn btn-ghost" id="folderBtn" type="button">Show in folder</button>
+      <button class="btn btn-ghost" id="againBtn" type="button">Run again</button>
+    </div>
+    <p class="muted small" id="resultPath"></p>
+  </section>
+
+  <!-- ===================== Footer ===================== -->
+  <footer class="foot">
+    <span class="muted small">
+      No data leaves this machine. Read-only access. Open source.
+    </span>
+    <button class="inline-link" data-external="https://securix.app" type="button" id="brandLink">
+      SecuriX
+    </button>
+  </footer>
+</main>
+
+<!-- ===================== About dialog ===================== -->
+<dialog id="aboutDialog">
+  <h2>About</h2>
+  <p class="muted small" id="aboutVersion"></p>
+  <h3>What this reads</h3>
+  <ul class="steps">
+    <li><strong>Microsoft:</strong> <code>AuditLogsQuery.Read.All</code> &mdash; Purview audit search, read-only.</li>
+    <li><strong>Google:</strong> <code>admin.reports.audit.readonly</code> &mdash; Admin SDK reports, read-only.</li>
+  </ul>
+  <h3>What it never does</h3>
+  <ul class="steps">
+    <li>Ask for your password. Sign-in happens on Microsoft's and Google's own pages.</li>
+    <li>Send data anywhere. There is no backend, no telemetry, no licence check.</li>
+    <li>Read prompt or response text. Only metadata and grounded resource names.</li>
+  </ul>
+  <h3>Where reports are written</h3>
+  <p class="muted small" id="aboutPath"></p>
+  <form method="dialog"><button class="btn btn-ghost" type="submit">Close</button></form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

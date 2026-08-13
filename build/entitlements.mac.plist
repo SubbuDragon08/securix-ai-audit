@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Minimum entitlements for a notarized Electron app.
+
+  Deliberately narrow. Notably absent: camera, microphone, location, address
+  book, and any file-access entitlement beyond user-selected save dialogs. A
+  security tool that requests capabilities it does not use invites exactly the
+  scrutiny it should be able to withstand.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Electron ships a JIT; the hardened runtime blocks it without these. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Outbound HTTPS to Microsoft Graph and the Google Admin SDK. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!--
+    The OAuth callback listener binds 127.0.0.1. Required even though the
+    listener is loopback-only and lives for a single request.
+  -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+
+  <!-- "Save a copy..." writes wherever the user points the dialog. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+</dict>
+</plist>

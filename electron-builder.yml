@@ -1,0 +1,130 @@
+# electron-builder configuration.
+#
+# Produces:
+#   macOS    .dmg (arm64 + x64)   -> drag-to-Applications installer
+#   Windows  .exe (NSIS installer) and a portable .exe
+#   Linux    .AppImage and .deb   (optional, but free to emit)
+#
+# SIGNING IS INTENTIONALLY DISABLED IN THIS FILE.
+# Everything needed is wired up and commented; flip it on once certificates
+# exist. Shipping an unsigned build to IT admins means Gatekeeper's "damaged and
+# can't be opened" and SmartScreen's "Windows protected your PC" — for a
+# security tool that is not a papercut, it is the end of the evaluation.
+# See README "Code signing and notarization".
+
+appId: app.securix.aiaudit
+productName: SecuriX AI Audit
+copyright: Copyright © 2026 SecuriX
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the bundled output ships. `src/`, `electron/`, and `node_modules` are all
+# already inlined by esbuild, so nothing else needs to be in the asar.
+files:
+  - dist-electron/**/*
+  - '!**/*.map'
+
+asar: true
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  darkModeSupport: true
+  # Hardened runtime is required for notarization.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # --- Enable once you have an Apple Developer ID ---------------------------
+  # identity: "Developer ID Application: Your Org (TEAMID)"
+  # notarize:
+  #   teamId: TEAMID
+  # Set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID in the env.
+  # --------------------------------------------------------------------------
+  # Until then, builds are unsigned; remove this line when you sign for real.
+  identity: null
+
+dmg:
+  title: ${productName}
+  icon: build/icon.png
+  contents:
+    - x: 140
+      y: 200
+      type: file
+    - x: 400
+      y: 200
+      type: link
+      path: /Applications
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  # --- Enable once you have an OV or EV code-signing certificate ------------
+  # Modern electron-builder prefers a signing hook or azure-trusted-signing
+  # over the deprecated certificateFile/certificatePassword pair:
+  # azureSignOptions:
+  #   publisherName: "Your Org"
+  #   endpoint: "https://eus.codesigning.azure.net/"
+  #   codeSigningAccountName: "your-account"
+  #   certificateProfileName: "your-profile"
+  # --------------------------------------------------------------------------
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SecuriX AI Audit
+
+# ---------------------------------------------------------------------------
+# Linux
+# ---------------------------------------------------------------------------
+linux:
+  icon: build/icon.png
+  # "Security;Network" puts it where an IT admin would look in a desktop menu.
+  category: Utility;Security;Network
+  synopsis: Audit Microsoft 365 Copilot and Google Gemini prompt activity
+  description: >
+    Connects to your own Microsoft 365 or Google Workspace tenant with read-only
+    audit permissions and generates a local HTML dashboard of AI prompt activity.
+    Runs entirely on this machine; no data is sent anywhere.
+  # Maintainer comes from package.json `author`. .deb and .rpm both refuse to
+  # build without it.
+  maintainer: SecuriX <support@securix.app>
+  desktopEntry:
+    StartupWMClass: SecuriX AI Audit
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64]
+
+# Debian/Ubuntu: Electron needs a keyring for encrypted token storage. These are
+# `Recommends`, not `Depends` — the app runs fine without them, it just declines
+# to persist tokens (see the Linux notes in the README).
+deb:
+  recommends:
+    - libsecret-1-0
+    - gnome-keyring
+
+# No auto-update server: this tool deliberately makes zero outbound calls of its
+# own. Users re-download from securix.app when a new version ships.
+publish: null

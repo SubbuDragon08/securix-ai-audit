@@ -1,16 +1,22 @@
-# AI Audit Lens
+# SecuriX AI Audit
 
 **See every Copilot and Gemini prompt in your tenant — without sending a single byte to anyone.**
 
-A free, open-source, single-command utility for enterprise IT admins. It signs into
-*your* Microsoft 365 or Google Workspace tenant with *your* admin credentials, pulls the
-AI prompt audit logs, and writes a self-contained HTML dashboard to your desktop.
+A free, open-source desktop app for enterprise IT admins. It signs into *your* Microsoft 365
+or Google Workspace tenant with *your* admin credentials, pulls the AI prompt audit logs, and
+writes a self-contained HTML dashboard to your Documents folder.
 
-```
-npx ai-audit-lens --demo          # see the report first, with synthetic data
-```
+Ships as a `.dmg` and a `.exe`. There is also a CLI for people who prefer one.
+
+![The app](docs/app-connect.png)
 
 ![The generated dashboard](docs/screenshot.png)
+
+> **There is no password field, and there never will be.** Sign-in happens on Microsoft's and
+> Google's own pages via OAuth; the app receives a scoped, read-only, expiring token and never
+> sees a credential. Any tool that asks an admin to type a tenant password into a downloaded
+> binary is indistinguishable from a phishing kit — and would not work anyway, since MFA and
+> Conditional Access block password grants.
 
 ---
 
@@ -35,13 +41,15 @@ This tool is asking for audit-read across your whole tenant, so it should have t
 
 | Property | How it is enforced |
 |---|---|
-| **No third-party server** | There is no backend. The CLI contacts exactly six hosts, all first-party: `login.microsoftonline.com` (or `--ms-authority`), `graph.microsoft.com`, `accounts.google.com`, `oauth2.googleapis.com`, `openidconnect.googleapis.com` (one cosmetic "signed in as" lookup), and `admin.googleapis.com`. Verify with `--verbose` or a proxy. |
-| **No secrets on disk** | Tokens live in process memory and die with the process. `--save-session` opts into a `0600` cache; it is off by default because a Global Admin refresh token on disk is a standing credential, not a one-shot report. |
+| **No third-party server** | There is no backend, no telemetry, no licence check, no update ping — nothing is sent to SecuriX, ever. Both the app and the CLI contact exactly six hosts, all first-party: `login.microsoftonline.com`, `graph.microsoft.com`, `accounts.google.com`, `oauth2.googleapis.com`, `openidconnect.googleapis.com` (one cosmetic "signed in as" lookup), and `admin.googleapis.com`. Point a proxy at it and check. |
+| **No secrets on disk by default** | Tokens live in process memory and die with the process. Persistence is opt-in: the app's **Stay signed in** encrypts them via `safeStorage` (macOS Keychain / Windows DPAPI / libsecret); the CLI's `--save-session` writes a `0600` file. Off by default either way, because a Global Admin refresh token at rest is a standing credential, not a one-shot report. |
 | **Read-only scopes** | `AuditLogsQuery.Read.All` and `admin.reports.audit.readonly`. Neither can mutate tenant state. |
 | **PKCE on every flow** | S256 code challenges, constant-time `state` validation, loopback listener bound to `127.0.0.1` and torn down after one callback. |
-| **You own the app registration** | No shared multi-tenant app ID. You register the client, you consent to it, you can delete it afterwards. |
+| **Consent is revocable and visible** | The desktop app authenticates through a multi-tenant Entra application published by SecuriX, so you can see exactly what you granted under *Enterprise applications* and revoke it there at any time. Prefer to own the registration outright? The CLI uses your own app id and shares no identity with SecuriX. |
 | **No prompt content** | Prompt and response bodies are never mapped into the report. `--include-raw` attaches full payloads to the `--json` stream only; the HTML never embeds them. |
-| **Zero dependencies** | The runtime `dependencies` block in `package.json` is empty. Nothing to audit but this repo. |
+| **Hardened renderer** | The UI runs `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`, behind a CSP with `connect-src 'none'` — it cannot make a network request or touch the filesystem. Every outbound call originates in the main process against a fixed host list. |
+| **OAuth in the real browser** | Sign-in opens your system browser, never an embedded webview. You can see the address bar and verify you are on `login.microsoftonline.com`. Embedded-webview OAuth is the phishing pattern, and Google blocks it outright. |
+| **Zero dependencies** | The runtime `dependencies` block in `package.json` is empty — Electron and the build tooling are dev dependencies. Nothing to audit but this repo. |
 
 The generated HTML embeds your audit records, so it is written `0600` and should be
 handled with the same rules as the audit log itself.
@@ -56,12 +64,49 @@ at all, vendor both libraries into `TEMPLATE` in [`src/report.ts`](src/report.ts
 
 ---
 
+## Two ways to run it
+
+### Desktop app (recommended)
+
+Download the installer, open it, click **Connect Microsoft 365**. That is the whole flow —
+no app registration, because SecuriX ships a multi-tenant Entra application you simply
+consent to.
+
+```bash
+# building it yourself
+npm install
+export SECURIX_ENTRA_CLIENT_ID="<your multi-tenant app id>"   # see DISTRIBUTION.md
+npm run app          # build + launch
+npm run dist:mac     # -> release/*.dmg
+npm run dist:win     # -> release/*.exe
+```
+
+Without `SECURIX_ENTRA_CLIENT_ID` the app still builds and runs, but shows a
+"not configured" banner and disables Microsoft sign-in. Google onboarding is
+bring-your-own either way — see below for why.
+
+**Publishing this as a lead magnet?** [DISTRIBUTION.md](DISTRIBUTION.md) covers the Entra
+registration, code signing and notarization, and the website download flow.
+
+### CLI
+
+```bash
+npx ai-audit-lens --demo          # preview with synthetic data
+```
+
+The CLI requires its own Entra app registration (walkthrough below) because it is not
+distributed with SecuriX's client id.
+
+---
+
 ## Setup
 
 Pick one or both clouds. Each takes about two minutes, once.
 
+These walkthroughs are for **the CLI**. The desktop app needs none of the Microsoft steps.
+
 <details open>
-<summary><b>Microsoft 365 Copilot — Entra ID app registration</b></summary>
+<summary><b>Microsoft 365 Copilot — Entra ID app registration (CLI only)</b></summary>
 
 **Prerequisites:** a licence that includes Purview Audit (most M365 E3/E5 and Business
 Premium plans), unified auditing enabled, and an account with **Audit Reader**,
@@ -87,7 +132,7 @@ in step 2.
 </details>
 
 <details open>
-<summary><b>Google Gemini for Workspace — OAuth client</b></summary>
+<summary><b>Google Gemini for Workspace — OAuth client (both the app and the CLI)</b></summary>
 
 **Prerequisites:** a Gemini for Workspace licence (Gemini audit logging began
 **2025-06-20**; earlier windows return nothing), and a **Super Admin** account.
@@ -247,9 +292,9 @@ Node's Single Executable Application support needs a **CommonJS** entry, which i
 `npm run bundle` produces.
 
 ```bash
-npm run bundle                              # -> build/ai-audit-lens.cjs (~94 KB)
+npm run bundle                              # -> dist-cjs/ai-audit-lens.cjs (~94 KB)
 cat > sea-config.json <<'JSON'
-{ "main": "build/ai-audit-lens.cjs", "output": "build/sea-prep.blob", "disableExperimentalSEAWarning": true }
+{ "main": "dist-cjs/ai-audit-lens.cjs", "output": "build/sea-prep.blob", "disableExperimentalSEAWarning": true }
 JSON
 node --experimental-sea-config sea-config.json
 cp "$(command -v node)" build/ai-audit-lens
@@ -267,7 +312,7 @@ fork against the CommonJS bundle:
 
 ```bash
 npm run bundle
-npx @yao-pkg/pkg build/ai-audit-lens.cjs \
+npx @yao-pkg/pkg dist-cjs/ai-audit-lens.cjs \
   --targets node20-macos-arm64,node20-win-x64,node20-linux-x64 --out-path dist-bin
 ```
 
@@ -302,24 +347,50 @@ Stack traces: `AI_AUDIT_LENS_DEBUG=1 ai-audit-lens ...`
 ## Project layout
 
 ```
-src/
-  index.ts       CLI parsing, orchestration, partial-failure handling
-  auth.ts        Entra device-code + loopback PKCE; Google loopback PKCE
-  fetch.ts       Purview async query lifecycle; Reports API pagination
-  normalize.ts   Provider records -> unified PromptEvent (defensive, schema-drift tolerant)
-  report.ts      Dictionary-encoded payload + the HTML dashboard template
-  http.ts        Retry, backoff with jitter, Retry-After, deadlines, timeouts
-  demo.ts        Seeded synthetic dataset for --demo
-  log.ts         stderr logger and TTY-aware progress
-  types.ts       Shared domain types
+src/               core — shared by both front ends, no Electron imports
+  run.ts           orchestration: auth -> collect -> normalise -> render
+  auth.ts          Entra device-code + loopback PKCE; Google loopback PKCE
+  fetch.ts         Purview async query lifecycle; Reports API pagination
+  normalize.ts     Provider records -> unified PromptEvent (schema-drift tolerant)
+  report.ts        Dictionary-encoded payload + the HTML dashboard template
+  http.ts          Retry, backoff with jitter, Retry-After, deadlines, cancellation
+  brand.ts         Product identity + the multi-tenant Entra client id
+  demo.ts          Seeded synthetic dataset for --demo
+  log.ts           Logger with a pluggable sink (stderr for CLI, IPC for the app)
+  types.ts         Shared domain types
+  index.ts         CLI front end: arg parsing and terminal presentation only
+
+electron/
+  main.ts          Window, hardening, IPC handlers, keychain session store
+  preload.ts       The contextBridge trust boundary
+
+ui/                renderer: plain HTML/CSS/JS, shipped verbatim, no build step
+  index.html  app.css  app.js
+
+scripts/
+  build-app.mjs      esbuild bundle for main + preload
+  start-app.mjs      dev launcher (strips ELECTRON_RUN_AS_NODE)
+  make-icon.mjs      renders build/icon.png
+  build-binaries.mjs bun cross-compile for the CLI
 ```
 
+Both front ends call the same `runAudit()` in `src/run.ts`, so the GUI and the CLI
+cannot drift apart on partial failures, deadlines, or redaction.
+
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # -> dist/ (ESM, what npx runs)
-npm run bundle      # -> build/ai-audit-lens.cjs (CJS, for SEA/pkg)
-npm run dev -- --demo
+npm run typecheck   # tsc --noEmit across src/ + electron/
+npm run app         # build and launch the desktop app
+npm run dist:mac    # -> release/*.dmg
+npm run dist:win    # -> release/*.exe
+npm run build       # -> dist/ (ESM CLI, what npx runs)
+npm run bundle      # -> dist-cjs/ai-audit-lens.cjs (CJS, for SEA/pkg)
+npm run cli -- --demo
 ```
+
+Running from **VS Code's integrated terminal**? `npm run app` handles it — VS Code
+exports `ELECTRON_RUN_AS_NODE=1`, which would otherwise make Electron boot as plain
+Node and fail with `Cannot read properties of undefined (reading 'whenReady')`.
+`scripts/start-app.mjs` strips it.
 
 ## Known limitations
 

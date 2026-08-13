@@ -1,0 +1,13 @@
+{
+  "//": "Emit config for the npx CLI only. The Electron entries are bundled by esbuild (scripts/build-app.mjs) and never pass through tsc.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": false,
+    "sourceMap": true,
+    "removeComments": false
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,16 +1,39 @@
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
 node_modules/
+
+# ---------------------------------------------------------------------------
+# Build output
+#
+# NOTE: `build/` is deliberately NOT ignored — it is electron-builder's
+# `buildResources` directory and holds committed source assets (icon.png,
+# entitlements.mac.plist). Ignoring it would mean a fresh clone could not
+# produce a notarizable macOS build. Compiled CLI bundles go to dist-cjs/.
+# ---------------------------------------------------------------------------
 dist/
-build/
+dist-cjs/
 dist-bin/
+dist-electron/
+release/
 *.tsbuildinfo
 
-# Generated reports may contain tenant data — never commit them.
+# ---------------------------------------------------------------------------
+# Generated reports — these embed real tenant audit records. Never commit one.
+# ---------------------------------------------------------------------------
 ai-audit-report-*.html
 *.report.html
 
-# Local secrets / config
+# ---------------------------------------------------------------------------
+# Local configuration
+# ---------------------------------------------------------------------------
 .env
 .env.local
+.env.*.local
 .ai-audit-lens/
 
+# ---------------------------------------------------------------------------
+# OS / editor
+# ---------------------------------------------------------------------------
 .DS_Store
+Thumbs.db

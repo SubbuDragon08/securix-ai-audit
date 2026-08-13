@@ -1,13 +1,11 @@
 {
+  "//": "Type-checking config: covers every source file, emits nothing. The CLI's actual emit lives in tsconfig.build.json, which needs a narrower rootDir.",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],
-
-    "rootDir": "src",
-    "outDir": "dist",
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -17,11 +15,9 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
 
-    "declaration": false,
-    "sourceMap": true,
-    "removeComments": false,
+    "noEmit": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "electron/**/*.ts"]
 }

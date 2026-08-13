@@ -38,7 +38,7 @@ import {
   HttpError,
   requestJson,
   requestRaw,
-  sleep,
+  sleepOrAbort,
 } from './http.js';
 import { log, Progress, style } from './log.js';
 import type { TimeWindow } from './types.js';
@@ -92,6 +92,8 @@ export interface MicrosoftFetchOptions {
   resumeQueryId?: string;
   /** Refresh the token mid-run; pagination can outlive a 1-hour access token. */
   refreshToken?: () => Promise<TokenSet>;
+  /** Aborts polling and in-flight requests when the operator cancels. */
+  signal?: AbortSignal;
 }
 
 export interface MicrosoftFetchResult {
@@ -134,7 +136,7 @@ export async function fetchCopilotAuditRecords(
     );
   }
 
-  await waitForQuery(queryId, opts.deadline, auth);
+  await waitForQuery(queryId, opts.deadline, auth, opts.signal);
   const queryWaitSeconds = Math.round((Date.now() - waitStart) / 1000);
 
   const { records, truncated } = await pageAuditRecords(queryId, opts, auth);
@@ -169,6 +171,7 @@ async function createAuditQuery(
         method: 'POST',
         headers: { ...headers, 'content-type': 'application/json' },
         body: JSON.stringify(body),
+        signal: opts.signal,
       },
       { label: 'create Purview query', deadline: opts.deadline, timeoutMs: 90_000 },
     );
@@ -184,6 +187,7 @@ async function waitForQuery(
   queryId: string,
   deadline: number,
   auth: () => Promise<Record<string, string>>,
+  signal?: AbortSignal,
 ): Promise<void> {
   const progress = new Progress('Purview query');
   const started = Date.now();
@@ -201,7 +205,7 @@ async function waitForQuery(
 
     const res = await requestRaw<AuditLogQuery>(
       `${GRAPH_BASE}/security/auditLog/queries/${encodeURIComponent(queryId)}`,
-      { headers: await auth() },
+      { headers: await auth(), signal },
       { label: 'poll Purview query', deadline, timeoutMs: 30_000 },
     );
 
@@ -233,7 +237,7 @@ async function waitForQuery(
     // Cheap polls early (most queries finish fast), then ease off so a long
     // wait does not burn the tenant's Graph throttling budget.
     const interval = elapsed < 60_000 ? 5_000 : elapsed < 300_000 ? 15_000 : 30_000;
-    await sleep(Math.min(interval, Math.max(1_000, deadline - Date.now())));
+    await sleepOrAbort(Math.min(interval, Math.max(1_000, deadline - Date.now())), signal);
   }
 }
 
@@ -261,7 +265,7 @@ async function pageAuditRecords(
   while (url) {
     const page: RecordsPage = await requestJson<RecordsPage>(
       url,
-      { headers: await auth() },
+      { headers: await auth(), signal: opts.signal },
       { label: 'Purview records page', deadline: opts.deadline, timeoutMs: 120_000 },
     );
 
@@ -359,6 +363,8 @@ export interface GoogleFetchOptions {
   maxRecords: number;
   deadline: number;
   refreshToken?: () => Promise<TokenSet>;
+  /** Aborts polling and in-flight requests when the operator cancels. */
+  signal?: AbortSignal;
 }
 
 export interface GoogleFetchResult {
@@ -413,7 +419,7 @@ export async function fetchGeminiActivities(
           nextPageToken?: string;
         }>(
           url.toString(),
-          { headers: { ...(await auth()), accept: 'application/json' } },
+          { headers: { ...(await auth()), accept: 'application/json' }, signal: opts.signal },
           {
             label: `Reports API (${application})`,
             deadline: opts.deadline,

@@ -92,6 +92,37 @@ const RETRYABLE_403_REASONS = new Set([
 export const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Raised when the operator cancels a run. Distinct from a timeout. */
+export class CancelledError extends Error {
+  constructor(message = 'Cancelled.') {
+    super(message);
+    this.name = 'CancelledError';
+  }
+}
+
+/**
+ * Sleep that wakes early if the run is cancelled.
+ *
+ * Purview polling sleeps up to 30s between checks. Without this, a Cancel
+ * click would appear frozen for half a minute — long enough that people
+ * force-quit the app and assume it hung.
+ */
+export function sleepOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new CancelledError());
+  if (!signal) return sleep(ms);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new CancelledError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** `Retry-After` is either delta-seconds or an HTTP-date. Handle both. */
 function parseRetryAfter(header: string | null): number | undefined {
   if (!header) return undefined;
@@ -168,6 +199,7 @@ export async function requestRaw<T = unknown>(
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    if (init.signal?.aborted) throw new CancelledError();
     if (opts.deadline !== undefined && Date.now() > opts.deadline) {
       throw new DeadlineExceededError(
         `Deadline exceeded before completing ${label}. Re-run with a longer --timeout or a shorter --days window.`,
@@ -221,10 +253,13 @@ export async function requestRaw<T = unknown>(
       log.warn(
         `${label}: HTTP ${res.status}${res.status === 429 ? ' (throttled)' : ''} — retrying in ${Math.round(wait / 1000)}s (attempt ${attempt + 1}/${retries}).`,
       );
-      await sleep(wait);
+      await sleepOrAbort(wait, init.signal ?? undefined);
       continue;
     } catch (err) {
-      if (err instanceof DeadlineExceededError) throw err;
+      if (err instanceof DeadlineExceededError || err instanceof CancelledError) throw err;
+      // An abort raised by the caller's signal is a cancellation, not a
+      // timeout — retrying it would ignore the operator.
+      if (init.signal?.aborted) throw new CancelledError();
       lastError = err;
 
       const timedOut = err instanceof Error && err.name === 'AbortError';
@@ -236,7 +271,7 @@ export async function requestRaw<T = unknown>(
       log.warn(
         `${label}: ${timedOut ? `no response in ${Math.round(timeoutMs / 1000)}s` : describeError(err)} — retrying in ${Math.round(wait / 1000)}s (attempt ${attempt + 1}/${retries}).`,
       );
-      await sleep(wait);
+      await sleepOrAbort(wait, init.signal ?? undefined);
       continue;
     } finally {
       clearTimeout(timer);
