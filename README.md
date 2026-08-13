@@ -25,7 +25,7 @@ Ships as a `.dmg` and a `.exe`. There is also a CLI for people who prefer one.
 Most organisations turned on Microsoft 365 Copilot or Gemini for Workspace without a
 way to answer three questions their auditors are about to ask:
 
-1. **Who is actually using it?** Licence counts are not usage.
+1. **Who is actually using it?** License counts are not usage.
 2. **What tenant data is the assistant reading?** Copilot grounds answers on SharePoint,
    OneDrive, and mailbox content — the audit log names those files.
 3. **Is it touching classified material?** Sensitivity labels on grounded resources are
