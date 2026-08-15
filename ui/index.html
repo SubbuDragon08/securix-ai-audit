@@ -99,23 +99,85 @@
           Requires a Super Admin account and a one-time OAuth client in your own Google Cloud project.
         </p>
         <details class="setup" id="gSetup">
-          <summary>Google setup <span class="muted small">(one time, ~2 minutes)</span></summary>
-          <ol class="steps">
-            <li>Open <button class="inline-link" data-external="https://console.cloud.google.com" type="button">Google Cloud Console</button> and pick a project.</li>
-            <li>Enable the <strong>Admin SDK API</strong>.</li>
-            <li>OAuth consent screen &rarr; <strong>Internal</strong>, add scope <code>admin.reports.audit.readonly</code>.</li>
-            <li>Credentials &rarr; OAuth client ID &rarr; <strong>Desktop app</strong>.</li>
-            <li>Paste the two values below.</li>
+          <summary>Google setup <span class="muted small">(one time, about 3 minutes)</span></summary>
+
+          <p class="muted small setup-intro">
+            Google has no equivalent of a shared app you can just approve, so you create a
+            read-only OAuth client inside your <em>own</em> Google Cloud project. Nothing is
+            shared with SecuriX. Sign in to every link below as a
+            <strong>Super Admin of your Workspace domain</strong>.
+          </p>
+
+          <ol class="steps steps-lg">
+            <li>
+              <strong>Create or pick a project.</strong>
+              <button class="inline-link" type="button"
+                      data-external="https://console.cloud.google.com/projectcreate">Open project creator &rarr;</button>
+              <span class="muted small step-note">Any name. An existing project is fine.</span>
+            </li>
+
+            <li>
+              <strong>Turn on the Admin SDK API.</strong>
+              <button class="inline-link" type="button"
+                      data-external="https://console.cloud.google.com/apis/library/admin.googleapis.com">Open Admin SDK page &rarr;</button>
+              <span class="muted small step-note">
+                Press <strong>Enable</strong>. If it already says "Manage", it is on.
+                Check the project name in the top bar first.
+              </span>
+            </li>
+
+            <li>
+              <strong>Configure the consent screen.</strong>
+              <button class="inline-link" type="button"
+                      data-external="https://console.cloud.google.com/apis/credentials/consent">Open consent screen &rarr;</button>
+              <span class="muted small step-note">
+                Choose <strong>Internal</strong> — your own staff only, and no Google review.
+                Fill in an app name and your email, then Save.
+                <br><em>Internal greyed out?</em> You are signed in with a personal
+                @gmail.com account. Switch to your Workspace admin account.
+              </span>
+            </li>
+
+            <li>
+              <strong>Add the read-only scope.</strong>
+              <span class="muted small step-note">
+                On the Scopes step choose <strong>Add or remove scopes</strong>, paste this into
+                the filter box, tick it, then Update:
+              </span>
+              <span class="copy-row">
+                <code id="gScope">https://www.googleapis.com/auth/admin.reports.audit.readonly</code>
+                <button class="btn btn-ghost copy-btn" type="button" id="copyScope">Copy</button>
+              </span>
+            </li>
+
+            <li>
+              <strong>Create the credential.</strong>
+              <button class="inline-link" type="button"
+                      data-external="https://console.cloud.google.com/apis/credentials">Open credentials &rarr;</button>
+              <span class="muted small step-note">
+                <strong>+ Create credentials</strong> &rarr; <strong>OAuth client ID</strong> &rarr;
+                Application type <strong>Desktop app</strong> &rarr; Create.
+                Not "Web application" — Desktop is what allows the local sign-in callback.
+              </span>
+            </li>
+
+            <li>
+              <strong>Paste both values below.</strong>
+              <span class="muted small step-note">
+                Google shows them once in a dialog; you can always reopen the client to copy them again.
+              </span>
+            </li>
           </ol>
+
           <label class="field-label" for="gClientId">Client ID</label>
           <input class="field" id="gClientId" type="text" spellcheck="false" autocomplete="off"
-                 placeholder="000000000000-xxxx.apps.googleusercontent.com">
+                 placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com">
           <label class="field-label" for="gClientSecret">Client secret</label>
           <input class="field" id="gClientSecret" type="password" spellcheck="false" autocomplete="off"
                  placeholder="GOCSPX-...">
-          <p class="muted small">
-            Stored locally in this app's settings. Google does not treat installed-app
-            secrets as confidential.
+          <p class="muted small setup-foot">
+            Stored locally in this app's settings, never transmitted to SecuriX. Google does not
+            treat installed-app secrets as confidential.
           </p>
         </details>
         <div class="card-actions">
@@ -224,6 +286,7 @@
   <h3>What this reads</h3>
   <ul class="steps">
     <li><strong>Microsoft:</strong> <code>AuditLogsQuery.Read.All</code> &mdash; Purview audit search, read-only.</li>
+    <li><strong>Microsoft:</strong> <code>SensitivityLabel.Read</code> &mdash; label names only, read-only.</li>
     <li><strong>Google:</strong> <code>admin.reports.audit.readonly</code> &mdash; Admin SDK reports, read-only.</li>
   </ul>
   <h3>What it never does</h3>

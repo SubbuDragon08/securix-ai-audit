@@ -194,13 +194,35 @@ const clampDays = (value: unknown): number => {
  */
 class KeychainSessionStore extends SessionStore {
   private entries: Record<string, TokenSet>;
+  private persist: boolean;
 
   constructor(
     private readonly store: Store,
-    private readonly persist: boolean,
+    persist: boolean,
   ) {
     super(false);
+    this.persist = persist;
     this.entries = persist ? store.readTokens() : {};
+  }
+
+  /**
+   * Change where tokens are kept **without dropping the live session**.
+   *
+   * This exists because rebuilding the store on every settings save silently
+   * signed the user out: with "stay signed in" off, a fresh instance starts
+   * with an empty map, so changing the history dropdown — which saves settings —
+   * discarded the tokens acquired seconds earlier. Turning persistence off must
+   * forget the *disk* copy only; the in-memory session belongs to this process
+   * and outlives any preference change.
+   */
+  setPersist(enabled: boolean): void {
+    if (enabled === this.persist) return;
+    this.persist = enabled;
+    if (enabled) {
+      this.store.writeTokens(this.entries);
+    } else {
+      this.store.clearTokens();
+    }
   }
 
   override get(key: string): TokenSet | undefined {
@@ -374,9 +396,10 @@ function registerIpc(): void {
           : '',
     };
     store.writeSettings(next);
-    // Toggling "stay signed in" off must actually forget, not just stop writing.
-    if (!next.staySignedIn) store.clearTokens();
-    session = new KeychainSessionStore(store, next.staySignedIn);
+    // Adjust persistence in place. Rebuilding the store here would discard the
+    // live session on every preference change — which is exactly the bug that
+    // made "Connect" appear to reset whenever a dropdown moved.
+    session.setPersist(next.staySignedIn);
     return buildState();
   });
 
@@ -423,7 +446,6 @@ function registerIpc(): void {
 
   ipcMain.handle('app:disconnect', () => {
     session.clear();
-    session = new KeychainSessionStore(store, store.readSettings().staySignedIn);
     return buildState();
   });
 

@@ -82,6 +82,9 @@ ${style.bold('GOOGLE (Admin SDK Reports)')}
 
 ${style.bold('SCOPES REQUESTED')}
   Microsoft  https://graph.microsoft.com/AuditLogsQuery.Read.All   (read-only)
+             https://graph.microsoft.com/SensitivityLabel.Read      (read-only)
+             The second turns sensitivity-label GUIDs in the audit records into
+             names. Declining it costs only the label names.
   Google     https://www.googleapis.com/auth/admin.reports.audit.readonly
 `;
 

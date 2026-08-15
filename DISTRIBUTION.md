@@ -192,11 +192,19 @@ admin who downloads the app just consents to it.
    > `AADSTS7000218` / "client_assertion or client_secret".
 
 9. **API permissions** → **+ Add a permission** → **Microsoft Graph** →
-   **Delegated permissions** → search `AuditLogsQuery` → tick
-   **AuditLogsQuery.Read.All** → **Add permissions**.
+   **Delegated permissions**. Add **both**:
+
+   | Permission | Why |
+   |---|---|
+   | `AuditLogsQuery.Read.All` | The Copilot audit records. Admin consent required. |
+   | `SensitivityLabel.Read` | Resolves the label GUIDs those records carry into names such as "Highly Confidential". Least-privileged option for `/security/dataSecurityAndGovernance/sensitivityLabels`. |
 
    Then remove the default `User.Read` if present — this app does not need it,
    and a shorter consent screen converts better.
+
+   > The tool degrades gracefully if `SensitivityLabel.Read` is declined: the
+   > report renders with shortened GUIDs and an on-page note explaining why.
+   > Nothing else is affected.
 
 10. *(Optional but worth it)* **Branding & properties** → add your logo, publisher
     name, and `https://securix.app`. Then complete
@@ -214,7 +222,11 @@ az login
 # Delegated AuditLogsQuery.Read.All on Microsoft Graph.
 # Graph resource app id is the same in every tenant.
 GRAPH_APP_ID=00000003-0000-0000-c000-000000000000
-SCOPE_ID=1d9e7ac3-0eca-442c-82f9-e92625af6e6d
+SCOPE_ID=1d9e7ac3-0eca-442c-82f9-e92625af6e6d   # AuditLogsQuery.Read.All
+
+# Look up SensitivityLabel.Read the same way and add it as a second resourceAccess entry:
+#   az ad sp show --id "$GRAPH_APP_ID" \
+#     --query "oauth2PermissionScopes[?value=='SensitivityLabel.Read'].id" -o tsv
 
 # Verify that GUID against your own tenant before trusting it:
 az ad sp show --id "$GRAPH_APP_ID" \

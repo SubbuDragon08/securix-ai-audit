@@ -352,3 +352,24 @@ export function pseudonymiseUsers(events: PromptEvent[]): PromptEvent[] {
     return { ...event, user: alias, clientIp: undefined };
   });
 }
+
+/**
+ * Swap sensitivity label GUIDs for their display names.
+ *
+ * Applied after normalisation because the name lookup is a separate Graph call
+ * that may legitimately fail; unresolved ids are left untouched so the report
+ * can shorten and annotate them rather than showing nothing.
+ */
+export function applyLabelNames(
+  events: PromptEvent[],
+  names: Map<string, string>,
+): PromptEvent[] {
+  if (names.size === 0) return events;
+  return events.map((event) => {
+    if (event.sensitivityLabels.length === 0) return event;
+    return {
+      ...event,
+      sensitivityLabels: event.sensitivityLabels.map((id) => names.get(id.toLowerCase()) ?? id),
+    };
+  });
+}

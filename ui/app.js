@@ -362,6 +362,21 @@ dom.againBtn.addEventListener('click', () => {
 
 dom.aboutBtn.addEventListener('click', () => dom.aboutDialog.showModal());
 
+// The scope string is long and easy to mistype; copying it is the difference
+// between a 30-second step and a stuck user.
+const copyScope = el('copyScope');
+copyScope.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(el('gScope').textContent.trim());
+    copyScope.textContent = 'Copied';
+  } catch {
+    // Clipboard can be refused; selecting the text is the fallback.
+    getSelection().selectAllChildren(el('gScope'));
+    copyScope.textContent = 'Selected';
+  }
+  setTimeout(() => { copyScope.textContent = 'Copy'; }, 1600);
+});
+
 // External links are declarative: the URL lives in the markup, the main process
 // checks it against an allowlist, and the OS browser opens it.
 document.addEventListener('click', (event) => {

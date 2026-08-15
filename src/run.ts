@@ -28,9 +28,16 @@ import {
   DEFAULT_GEMINI_APPLICATIONS,
   fetchCopilotAuditRecords,
   fetchGeminiActivities,
+  fetchSensitivityLabels,
 } from './fetch.js';
 import { log } from './log.js';
-import { normalizeGoogle, normalizeMicrosoft, pseudonymiseUsers, sortEvents } from './normalize.js';
+import {
+  applyLabelNames,
+  normalizeGoogle,
+  normalizeMicrosoft,
+  pseudonymiseUsers,
+  sortEvents,
+} from './normalize.js';
 import { renderReport } from './report.js';
 import type { PromptEvent, Provider, ProviderResult } from './types.js';
 
@@ -112,7 +119,11 @@ async function runMicrosoft(
     const authOptions = {
       tenantId: ms.tenantId,
       clientId: ms.clientId,
-      scopes: ['https://graph.microsoft.com/AuditLogsQuery.Read.All'],
+      scopes: [
+        'https://graph.microsoft.com/AuditLogsQuery.Read.All',
+        // Turns label GUIDs in the audit records into names an admin recognises.
+        'https://graph.microsoft.com/SensitivityLabel.Read',
+      ],
       mode: ms.auth,
       port: config.port,
       authority: ms.authority,
@@ -142,6 +153,13 @@ async function runMicrosoft(
     // doubles peak memory on a large tenant for no benefit. Skipped when
     // --include-raw, because there the events still reference them.
     if (!config.includeRaw) fetched.records.length = 0;
+
+    // Only worth a round trip if something actually came back labelled.
+    if (result.events.some((e) => e.sensitivityLabels.length > 0)) {
+      const labels = await fetchSensitivityLabels({ token, deadline, signal: hooks.signal });
+      result.events = applyLabelNames(result.events, labels.names);
+      if (labels.warning) fetched.warnings.push(labels.warning);
+    }
 
     result.truncated = fetched.truncated;
     result.warnings = fetched.warnings;

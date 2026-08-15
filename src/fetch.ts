@@ -327,6 +327,75 @@ function explainGraphError(err: unknown, operations: string[]): Error {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Sensitivity label names
+// ---------------------------------------------------------------------------
+
+interface GraphSensitivityLabel {
+  id?: string;
+  name?: string;
+  displayName?: string;
+  isEnabled?: boolean;
+  sublabels?: GraphSensitivityLabel[];
+}
+
+/**
+ * Resolve sensitivity label GUIDs to human names.
+ *
+ * Purview audit records carry `SensitivityLabelId` — a GUID — and nothing else.
+ * Rendering `8faca7b8-8d20-48a3-8ea2-0f96310a848e` on the tile that is supposed
+ * to say "Highly Confidential" makes the most valuable number in the report look
+ * broken, so the names are fetched once per run and applied client-side.
+ *
+ *   GET /security/dataSecurityAndGovernance/sensitivityLabels
+ *   Delegated scope: SensitivityLabel.Read  (least privileged for this call)
+ *
+ * Sublabels are nested one level under their parent and a document is very often
+ * tagged with a *sublabel*, so the tree is flattened rather than read top-level
+ * only — that was the difference between resolving half the labels and all of
+ * them.
+ *
+ * Failure is never fatal: a tenant that declined the extra scope still gets the
+ * whole report, with shortened GUIDs and an explanatory note.
+ */
+export async function fetchSensitivityLabels(opts: {
+  token: TokenSet;
+  deadline: number;
+  signal?: AbortSignal;
+}): Promise<{ names: Map<string, string>; warning?: string }> {
+  const names = new Map<string, string>();
+
+  const flatten = (labels: GraphSensitivityLabel[] | undefined): void => {
+    for (const label of labels ?? []) {
+      const id = label.id?.toLowerCase();
+      const name = label.displayName ?? label.name;
+      if (id && name) names.set(id, name);
+      flatten(label.sublabels);
+    }
+  };
+
+  try {
+    const page = await requestJson<{ value?: GraphSensitivityLabel[] }>(
+      `${GRAPH_BASE}/security/dataSecurityAndGovernance/sensitivityLabels`,
+      { headers: { ...bearer(opts.token), accept: 'application/json' }, signal: opts.signal },
+      { label: 'sensitivity labels', deadline: opts.deadline, timeoutMs: 30_000, retries: 2 },
+    );
+    flatten(page.value);
+    log.ok(`Resolved ${names.size} sensitivity label name${names.size === 1 ? '' : 's'}.`);
+    return { names };
+  } catch (err) {
+    const status = err instanceof HttpError ? err.status : 0;
+    const warning =
+      status === 403 || status === 401
+        ? 'Sensitivity label names could not be read (SensitivityLabel.Read was not granted), ' +
+          'so labels appear as shortened GUIDs. Everything else is unaffected.'
+        : `Sensitivity label names could not be read: ${(err as Error).message}`;
+    log.warn(warning);
+    return { names, warning };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Google Workspace Admin SDK Reports
 // ---------------------------------------------------------------------------
