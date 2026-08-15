@@ -43,6 +43,15 @@ interface Payload {
     redacted: boolean;
     totalEvents: number;
     shownEvents: number;
+    /**
+     * The platform this report is about.
+     *
+     * An organisation runs one assistant — whichever came with its productivity
+     * suite — so the report drops the whole provider dimension (split charts,
+     * platform column, platform filter) and spends that space on widgets
+     * specific to the platform in play. `mixed` restores the comparison view.
+     */
+    primaryProvider: 'microsoft' | 'google' | 'mixed' | 'none';
     providers: Array<{
       provider: string;
       label: string;
@@ -53,15 +62,23 @@ interface Payload {
       diagnostics: Record<string, string | number | boolean>;
     }>;
   };
-  dict: { users: string[]; apps: string[]; ops: string[]; resources: string[]; labels: string[] };
+  dict: {
+    users: string[];
+    apps: string[];
+    ops: string[];
+    resources: string[];
+    labels: string[];
+    /** Google `feature_source` values. Empty for Microsoft. */
+    surfaces: string[];
+  };
   /**
-   * [timestampMs, userIdx, providerIdx, appIdx, opIdx, ip, resourceIdx[], labelIdx[]]
+   * [timestampMs, userIdx, providerIdx, appIdx, opIdx, ip, resourceIdx[], labelIdx[], surfaceIdx]
    *
    * Resources are interned like every other string. They repeat heavily — a
    * handful of hot documents account for most groundings in a real tenant — and
    * inlining them was by far the largest contributor to report size.
    */
-  rows: Array<[number, number, number, number, number, string, number[], number[]]>;
+  rows: Array<[number, number, number, number, number, string, number[], number[], number]>;
 }
 
 class Interner {
@@ -89,6 +106,7 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
   const ops = new Interner();
   const resources = new Interner();
   const labels = new Interner();
+  const surfaces = new Interner();
 
   const shown = events.slice(0, maxRows);
   const rows = shown.map((e): Payload['rows'][number] => [
@@ -102,7 +120,21 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
     // the table only ever shows the first few before "+N more".
     e.accessedResources.slice(0, 6).map((r) => resources.intern(r)),
     e.sensitivityLabels.slice(0, 4).map((l) => labels.intern(l)),
+    e.surface ? surfaces.intern(e.surface) : -1,
   ]);
+
+  // Derived from the events actually collected, not from what was configured:
+  // a provider that authenticated but returned nothing should not claim the
+  // report.
+  const present = new Set(shown.map((e) => e.provider));
+  const primaryProvider: Payload['meta']['primaryProvider'] =
+    present.size === 0
+      ? 'none'
+      : present.size > 1
+        ? 'mixed'
+        : present.has('microsoft')
+          ? 'microsoft'
+          : 'google';
 
   return {
     meta: {
@@ -114,6 +146,7 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
       redacted: meta.redacted,
       totalEvents: events.length,
       shownEvents: shown.length,
+      primaryProvider,
       providers: meta.results.map((r) => ({
         provider: r.provider,
         label: PROVIDER_LABELS[r.provider] ?? r.provider,
@@ -130,6 +163,7 @@ function buildPayload(events: PromptEvent[], meta: ReportMeta, maxRows: number):
       ops: ops.values,
       resources: resources.values,
       labels: labels.values,
+      surfaces: surfaces.values,
     },
     rows,
   };
@@ -223,6 +257,15 @@ const TEMPLATE = `<!doctype html>
     --status-warning: #fab219;
     --status-good: #0ca30c;
     --wash: rgba(42, 120, 214, 0.08);
+    /* Sequential blue ramp for the heatmap: one hue, light -> dark. */
+    --heat-0: #eeeeea;
+    --heat-1: #cde2fb;
+    --heat-2: #9ec5f4;
+    --heat-3: #6da7ec;
+    --heat-4: #3987e5;
+    --heat-5: #2a78d6;
+    --heat-6: #1c5cab;
+    --heat-7: #0d366b;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
@@ -239,6 +282,15 @@ const TEMPLATE = `<!doctype html>
       --series-2: #d95926;
       --series-3: #199e70;
       --wash: rgba(57, 135, 229, 0.14);
+      /* Dark surface: run the ramp dark -> light so magnitude reads as brightness. */
+      --heat-0: #232322;
+      --heat-1: #10314f;
+      --heat-2: #104281;
+      --heat-3: #1c5cab;
+      --heat-4: #256abf;
+      --heat-5: #3987e5;
+      --heat-6: #6da7ec;
+      --heat-7: #9ec5f4;
     }
   }
   :root[data-theme="dark"] {
@@ -255,6 +307,14 @@ const TEMPLATE = `<!doctype html>
     --series-2: #d95926;
     --series-3: #199e70;
     --wash: rgba(57, 135, 229, 0.14);
+    --heat-0: #232322;
+    --heat-1: #10314f;
+    --heat-2: #104281;
+    --heat-3: #1c5cab;
+    --heat-4: #256abf;
+    --heat-5: #3987e5;
+    --heat-6: #6da7ec;
+    --heat-7: #9ec5f4;
   }
 
   body {
@@ -294,6 +354,20 @@ const TEMPLATE = `<!doctype html>
     white-space: nowrap;
   }
   .chart-scroll { overflow-x: auto; }
+  /* Tailwind's display utilities (.grid, .flex) are emitted after preflight's
+     [hidden]{display:none}, so at equal specificity they win and a hidden
+     section still paints. Provider gating depends on this holding. */
+  [hidden] { display: none !important; }
+  .heat-grid { display: grid; grid-template-columns: 34px repeat(24, 1fr); gap: 2px; }
+  .heat-cell { aspect-ratio: 1 / 1; border-radius: 3px; min-height: 14px; }
+  .heat-rowlabel, .heat-collabel {
+    font-size: 10px; color: var(--text-muted); display: flex; align-items: center;
+  }
+  .heat-collabel { justify-content: center; }
+  .heat-swatch { width: 13px; height: 13px; border-radius: 3px; }
+  .sens-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .sens-bar { flex: 1; height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .sens-fill { height: 100%; border-radius: 999px; background: var(--status-critical); }
   @media print {
     .no-print { display: none !important; }
     body { background: #fff; }
@@ -324,14 +398,18 @@ const TEMPLATE = `<!doctype html>
         <label for="q" class="ink-2 mb-1 block text-xs font-medium">Search user, app, activity, or resource</label>
         <input id="q" type="search" placeholder="e.g. finance@, Teams, layoffs.xlsx" class="field w-full px-3 py-2 text-sm" autocomplete="off">
       </div>
-      <div>
+      <div id="providerFilterWrap" hidden>
         <label for="providerFilter" class="ink-2 mb-1 block text-xs font-medium">Platform</label>
         <select id="providerFilter" class="field px-3 py-2 text-sm"><option value="">All platforms</option></select>
       </div>
       <div>
-        <label for="appFilter" class="ink-2 mb-1 block text-xs font-medium">Surface</label>
-        <select id="appFilter" class="field px-3 py-2 text-sm"><option value="">All surfaces</option></select>
+        <label for="appFilter" class="ink-2 mb-1 block text-xs font-medium" id="appFilterLabel">App</label>
+        <select id="appFilter" class="field px-3 py-2 text-sm"><option value="">All apps</option></select>
       </div>
+      <label class="flex cursor-pointer items-center gap-2 px-1 py-2 text-sm" id="labelledWrap" hidden>
+        <input type="checkbox" id="labelledFilter" class="h-4 w-4">
+        <span>Only labelled content</span>
+      </label>
       <button id="resetFilters" class="field px-3 py-2 text-sm font-medium">Reset</button>
     </div>
   </section>
@@ -340,10 +418,10 @@ const TEMPLATE = `<!doctype html>
   <section class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4" id="kpis"></section>
 
   <!-- Charts -->
-  <section class="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+  <section class="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
     <div class="card p-5 xl:col-span-2">
       <h2 class="text-sm font-semibold">Prompt volume over time</h2>
-      <p class="ink-3 mt-0.5 text-xs">Interactions per day across the selected window</p>
+      <p class="ink-3 mt-0.5 text-xs" id="volumeSub">Interactions per day across the selected window</p>
       <div class="chart-scroll mt-4"><div style="height:300px;min-width:420px"><canvas id="volumeChart"></canvas></div></div>
     </div>
     <div class="card p-5">
@@ -353,16 +431,54 @@ const TEMPLATE = `<!doctype html>
     </div>
   </section>
 
-  <section class="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-    <div class="card p-5">
-      <h2 class="text-sm font-semibold">Surfaces</h2>
-      <p class="ink-3 mt-0.5 text-xs">Where the assistant was invoked</p>
-      <div class="chart-scroll mt-4"><div style="height:280px;min-width:280px"><canvas id="appsChart"></canvas></div></div>
+  <!-- When people use it. Off-hours concentration is a security signal, not
+       just an adoption one, which is why the stat sits in the caption. -->
+  <section class="card mb-4 p-5">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h2 class="text-sm font-semibold">When the assistant is used</h2>
+        <p class="ink-3 mt-0.5 text-xs" id="heatSub">Interactions by day and hour (UTC)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="ink-3 text-xs">Fewer</span>
+        <div class="flex gap-[2px]" id="heatLegend"></div>
+        <span class="ink-3 text-xs">More</span>
+      </div>
     </div>
+    <div class="chart-scroll mt-4"><div id="heatmap" style="min-width:560px"></div></div>
+  </section>
+
+  <!-- Microsoft-only: the security payload. Copilot names the tenant files it
+       grounded each answer on; Google exposes no equivalent. -->
+  <section class="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3" id="groundingSection" hidden>
     <div class="card p-5 xl:col-span-2">
-      <h2 class="text-sm font-semibold">Activity types</h2>
-      <p class="ink-3 mt-0.5 text-xs">What users asked the assistant to do</p>
-      <div class="chart-scroll mt-4"><div style="height:280px;min-width:420px"><canvas id="opsChart"></canvas></div></div>
+      <h2 class="text-sm font-semibold">Most-read tenant files</h2>
+      <p class="ink-3 mt-0.5 text-xs">Documents Copilot opened to answer prompts</p>
+      <div class="chart-scroll mt-4"><div style="height:300px;min-width:420px"><canvas id="docsChart"></canvas></div></div>
+    </div>
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold">Sensitivity exposure</h2>
+      <p class="ink-3 mt-0.5 text-xs">Classified content reached by the assistant</p>
+      <div id="sensitivityPanel" class="mt-4"></div>
+    </div>
+  </section>
+
+  <section class="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-3" id="breakdownSection">
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold" id="appsTitle">Apps</h2>
+      <p class="ink-3 mt-0.5 text-xs" id="appsSub">Where the assistant was invoked</p>
+      <div class="chart-scroll mt-4"><div style="height:280px;min-width:260px"><canvas id="appsChart"></canvas></div></div>
+    </div>
+    <div class="card p-5" id="opsCard">
+      <h2 class="text-sm font-semibold" id="opsTitle">Activity types</h2>
+      <p class="ink-3 mt-0.5 text-xs" id="opsSub">What users asked the assistant to do</p>
+      <div class="chart-scroll mt-4"><div style="height:280px;min-width:260px"><canvas id="opsChart"></canvas></div></div>
+    </div>
+    <!-- Google-only: feature_source tells you which UI entry point was used. -->
+    <div class="card p-5" id="surfaceCard" hidden>
+      <h2 class="text-sm font-semibold">Invocation points</h2>
+      <p class="ink-3 mt-0.5 text-xs">Which Gemini entry point users reached for</p>
+      <div class="chart-scroll mt-4"><div style="height:280px;min-width:260px"><canvas id="surfaceChart"></canvas></div></div>
     </div>
   </section>
 
@@ -385,10 +501,10 @@ const TEMPLATE = `<!doctype html>
           <tr class="border-b rule">
             <th class="px-5 py-3 font-medium" data-sort="0" scope="col">Time (UTC)</th>
             <th class="px-5 py-3 font-medium" data-sort="1" scope="col">User</th>
-            <th class="px-5 py-3 font-medium" data-sort="2" scope="col">Platform</th>
-            <th class="px-5 py-3 font-medium" data-sort="3" scope="col">Surface</th>
+            <th class="px-5 py-3 font-medium" data-sort="2" scope="col" id="thPlatform">Platform</th>
+            <th class="px-5 py-3 font-medium" data-sort="3" scope="col" id="thApp">App</th>
             <th class="px-5 py-3 font-medium" data-sort="4" scope="col">Activity</th>
-            <th class="px-5 py-3 font-medium" scope="col">Resources touched</th>
+            <th class="px-5 py-3 font-medium" scope="col" id="thResources">Files read</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -415,7 +531,10 @@ const TEMPLATE = `<!doctype html>
   var PROVIDER_LABELS = ['Microsoft 365 Copilot', 'Google Gemini'];
 
   var PAGE_SIZE = 50;
-  var state = { q: '', provider: '', app: '', sort: 0, dir: -1, page: 0, view: ROWS };
+  var state = { q: '', provider: '', app: '', labelled: false, sort: 0, dir: -1, page: 0, view: ROWS };
+  var MODE = META.primaryProvider;              // microsoft | google | mixed | none
+  var SINGLE = MODE === 'microsoft' || MODE === 'google';
+  var IS_MS = MODE === 'microsoft';
   var charts = {};
 
   // ---- helpers ----------------------------------------------------------
@@ -436,10 +555,39 @@ const TEMPLATE = `<!doctype html>
   function resourcesOf(r) { return r[6].map(function (i) { return DICT.resources[i]; }); }
   function labelsOf(r) { return r[7].map(function (i) { return DICT.labels[i]; }); }
 
+  function surfaceOf(r) { return r[8] >= 0 ? DICT.surfaces[r[8]] : ''; }
+
+  /**
+   * Purview reports sensitivity as a label GUID, not a name. Rather than print
+   * a raw GUID at the reader, shorten it and flag it — resolving the display
+   * name needs an extra Graph scope this tool deliberately does not request.
+   */
+  var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var sawGuidLabel = false;
+  function prettyLabel(v) {
+    if (GUID_RE.test(v)) { sawGuidLabel = true; return 'Label ' + v.slice(0, 8); }
+    return v;
+  }
+
+  /** Tally how often each file was read, and by how many distinct people. */
+  function resourceUsage(rows) {
+    var map = new Map();
+    for (var i = 0; i < rows.length; i++) {
+      var ids = rows[i][6];
+      for (var k = 0; k < ids.length; k++) {
+        var entry = map.get(ids[k]);
+        if (!entry) { entry = { count: 0, users: new Set() }; map.set(ids[k], entry); }
+        entry.count++;
+        entry.users.add(rows[i][1]);
+      }
+    }
+    return map;
+  }
+
   function rowText(r) {
     return (DICT.users[r[1]] + ' ' + PROVIDER_LABELS[r[2]] + ' ' + DICT.apps[r[3]] + ' ' +
-            DICT.ops[r[4]] + ' ' + r[5] + ' ' + resourcesOf(r).join(' ') + ' ' +
-            labelsOf(r).join(' ')).toLowerCase();
+            DICT.ops[r[4]] + ' ' + r[5] + ' ' + surfaceOf(r) + ' ' +
+            resourcesOf(r).join(' ') + ' ' + labelsOf(r).join(' ')).toLowerCase();
   }
 
   // ---- filtering --------------------------------------------------------
@@ -448,6 +596,7 @@ const TEMPLATE = `<!doctype html>
     state.view = ROWS.filter(function (r) {
       if (state.provider !== '' && String(r[2]) !== state.provider) return false;
       if (state.app !== '' && DICT.apps[r[3]] !== state.app) return false;
+      if (state.labelled && r[7].length === 0) return false;
       if (q !== '' && rowText(r).indexOf(q) === -1) return false;
       return true;
     });
@@ -513,10 +662,14 @@ const TEMPLATE = `<!doctype html>
     var users = new Set();
     var withResources = 0;
     var labelled = 0;
+    var offHours = 0;
     for (var i = 0; i < rows.length; i++) {
       users.add(rows[i][1]);
       if (rows[i][6].length > 0) withResources++;
       if (rows[i][7].length > 0) labelled++;
+      var h = new Date(rows[i][0]).getUTCHours();
+      var d = new Date(rows[i][0]).getUTCDay();
+      if (h < 8 || h >= 18 || d === 0 || d === 6) offHours++;
     }
     var daily = dailySeries(rows);
     var totals = daily.labels.map(function (_, i) {
@@ -526,16 +679,45 @@ const TEMPLATE = `<!doctype html>
     totals.forEach(function (v, i) { if (v > peak) { peak = v; peakIdx = i; } });
     var activeDays = totals.filter(function (v) { return v > 0; }).length;
 
+    // Adoption direction: second half of the window against the first.
+    var half = Math.floor(totals.length / 2);
+    var first = totals.slice(0, half).reduce(function (a, b) { return a + b; }, 0);
+    var second = totals.slice(half).reduce(function (a, b) { return a + b; }, 0);
+    var trend = first > 0 ? Math.round(((second - first) / first) * 100) : null;
+    var trendText = trend === null ? activeDays + ' active days'
+      : (trend >= 0 ? '\u2191 ' : '\u2193 ') + Math.abs(trend) + '% vs first half';
+
+    var offPct = rows.length ? Math.round((offHours / rows.length) * 100) : 0;
+
     var tiles = [
-      { label: 'Interactions', value: num(rows.length), sub: activeDays + ' active day' + (activeDays === 1 ? '' : 's') },
-      { label: 'Active users', value: num(users.size), sub: users.size ? (rows.length / users.size).toFixed(1) + ' avg per user' : 'no activity' },
-      { label: 'Busiest day', value: peakIdx >= 0 ? num(peak) : '0', sub: peakIdx >= 0 ? daily.labels[peakIdx] : 'no activity' },
+      { label: 'Interactions', value: num(rows.length), sub: trendText },
       {
-        label: 'Grounded on tenant data',
-        value: num(withResources),
-        sub: labelled > 0 ? num(labelled) + ' touched labelled content' : 'no sensitivity labels seen',
-        alert: labelled > 0
-      }
+        label: 'Active users',
+        value: num(users.size),
+        sub: users.size ? (rows.length / users.size).toFixed(1) + ' avg per user' : 'no activity'
+      },
+      {
+        label: 'Busiest day',
+        value: peakIdx >= 0 ? num(peak) : '0',
+        sub: peakIdx >= 0 ? daily.labels[peakIdx] : 'no activity'
+      },
+      // The fourth tile is the one that differs by platform: Microsoft can say
+      // what the assistant read, Google cannot, so it reports timing risk.
+      IS_MS
+        ? {
+            label: 'Read tenant files',
+            value: num(withResources),
+            sub: labelled > 0
+              ? num(labelled) + ' touched classified content'
+              : 'none carried a sensitivity label',
+            alert: labelled > 0
+          }
+        : {
+            label: 'Outside work hours',
+            value: offPct + '%',
+            sub: num(offHours) + ' interactions, nights and weekends',
+            alert: offPct >= 25
+          }
     ];
 
     document.getElementById('kpis').innerHTML = tiles.map(function (t) {
@@ -546,6 +728,8 @@ const TEMPLATE = `<!doctype html>
           (t.alert ? ' style="color:var(--status-critical)"' : '') + '>' + esc(t.sub) + '</div>' +
         '</div>';
     }).join('');
+
+    return { offPct: offPct, offHours: offHours };
   }
 
   // ---- charts -----------------------------------------------------------
@@ -610,7 +794,9 @@ const TEMPLATE = `<!doctype html>
       return {
         label: PROVIDER_LABELS[i],
         data: d.series[i],
-        backgroundColor: slots[i],
+        // Single-provider reports use slot 1 like every other chart on the
+        // page; slot 2 only earns its place when both platforms are compared.
+        backgroundColor: active.length > 1 ? slots[i] : css('--series-1'),
         borderColor: surface,
         // 2px surface gap between stacked segments, not a drawn border.
         borderWidth: active.length > 1 ? { top: 2 } : 0,
@@ -666,6 +852,17 @@ const TEMPLATE = `<!doctype html>
     }
   };
 
+  /**
+   * Size a horizontal bar chart to its content.
+   *
+   * A fixed height leaves a two-category chart floating in whitespace and
+   * squeezes a ten-category one. 30px per bar tracks the 20px bar plus gap.
+   */
+  function fitBarHeight(canvasId, count) {
+    var box = document.getElementById(canvasId).parentNode;
+    box.style.height = Math.max(110, count * 30 + 26) + 'px';
+  }
+
   /** Horizontal bars, one series -> slot 1 for every bar (no value ramp). */
   function renderRanked(key, canvasId, rows, keyFn, limit, withOther) {
     var entries = topN(countBy(rows, keyFn), limit, withOther);
@@ -683,6 +880,7 @@ const TEMPLATE = `<!doctype html>
     // Reserve room so the longest bar's label is never clipped.
     opts.layout = { padding: { right: 52, top: 4, bottom: 4 } };
     opts.plugins.barValueLabels = { color: css('--text-secondary') };
+    fitBarHeight(canvasId, entries.length);
 
     destroy(key);
     charts[key] = new Chart(document.getElementById(canvasId), {
@@ -703,6 +901,159 @@ const TEMPLATE = `<!doctype html>
       options: opts,
       plugins: [barValueLabels]
     });
+  }
+
+  // ---- heatmap: weekday x hour ------------------------------------------
+  var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  /**
+   * A CSS grid, not a chart library: Chart.js has no native matrix type, and
+   * 168 coloured divs are lighter and more accessible than a plugin. Every cell
+   * carries a title so the value is reachable without colour, and the table
+   * view below remains the full WCAG-clean twin.
+   */
+  function renderHeatmap(rows, offStats) {
+    // getUTCDay() is Sunday-first; shift so the week reads Mon..Sun.
+    var counts = [];
+    for (var d = 0; d < 7; d++) counts.push(new Array(24).fill(0));
+    var max = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var dt = new Date(rows[i][0]);
+      var day = (dt.getUTCDay() + 6) % 7;
+      var hour = dt.getUTCHours();
+      counts[day][hour]++;
+      if (counts[day][hour] > max) max = counts[day][hour];
+    }
+
+    var html = '<div class="heat-grid">';
+    html += '<div></div>';
+    for (var h = 0; h < 24; h++) {
+      html += '<div class="heat-collabel">' + (h % 3 === 0 ? (h < 10 ? '0' + h : h) : '') + '</div>';
+    }
+    for (var d2 = 0; d2 < 7; d2++) {
+      html += '<div class="heat-rowlabel">' + DAY_NAMES[d2] + '</div>';
+      for (var h2 = 0; h2 < 24; h2++) {
+        var v = counts[d2][h2];
+        // Bucket 1..7 on the observed max; 0 keeps its own neutral step so
+        // "no activity" never reads as "a little activity".
+        var step = v === 0 ? 0 : Math.max(1, Math.ceil((v / max) * 7));
+        html += '<div class="heat-cell" style="background:var(--heat-' + step + ')" title="' +
+          DAY_NAMES[d2] + ' ' + (h2 < 10 ? '0' + h2 : h2) + ':00 UTC — ' + v +
+          ' interaction' + (v === 1 ? '' : 's') + '"></div>';
+      }
+    }
+    html += '</div>';
+    document.getElementById('heatmap').innerHTML = html;
+
+    var legend = '';
+    for (var L = 0; L <= 7; L++) legend += '<div class="heat-swatch" style="background:var(--heat-' + L + ')"></div>';
+    document.getElementById('heatLegend').innerHTML = legend;
+
+    document.getElementById('heatSub').textContent =
+      'Interactions by day and hour (UTC) · ' + offStats.offPct +
+      '% fall outside 08:00–18:00 on weekdays';
+  }
+
+  // ---- most-read tenant files (Microsoft only) --------------------------
+  function renderDocuments(rows) {
+    var usage = resourceUsage(rows);
+    var entries = Array.from(usage.entries())
+      .sort(function (a, b) { return b[1].count - a[1].count; })
+      .slice(0, 8);
+
+    var labels = entries.map(function (e) { return DICT.resources[e[0]]; });
+    var values = entries.map(function (e) { return e[1].count; });
+    var userCounts = entries.map(function (e) { return e[1].users.size; });
+
+    var opts = baseOptions();
+    opts.indexAxis = 'y';
+    opts.interaction = { mode: 'nearest', intersect: true };
+    opts.scales.x.display = false;
+    opts.scales.y.grid = { display: false, drawBorder: false };
+    opts.scales.y.border = { color: css('--axis') };
+    opts.scales.y.ticks.callback = function (value) {
+      var label = this.getLabelForValue(value);
+      return label.length > 30 ? label.slice(0, 29) + '\u2026' : label;
+    };
+    opts.layout = { padding: { right: 60, top: 4, bottom: 4 } };
+    opts.plugins.barValueLabels = { color: css('--text-secondary') };
+    // The "how many people" number matters as much as the raw read count: one
+    // person opening a file 40 times is very different from 40 people doing so.
+    opts.plugins.tooltip.callbacks = {
+      afterLabel: function (ctx) {
+        return userCounts[ctx.dataIndex] + ' distinct user' + (userCounts[ctx.dataIndex] === 1 ? '' : 's');
+      }
+    };
+
+    destroy('docs');
+    fitBarHeight('docsChart', entries.length);
+    if (entries.length === 0) {
+      document.getElementById('docsChart').parentNode.innerHTML =
+        '<div class="ink-3 flex h-full items-center justify-center text-center text-xs">' +
+        'No grounded files in this slice.</div>';
+      return;
+    }
+    charts.docs = new Chart(document.getElementById('docsChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Reads',
+          data: values,
+          backgroundColor: css('--series-1'),
+          borderRadius: 4,
+          borderSkipped: false,
+          maxBarThickness: 20,
+          categoryPercentage: 0.8
+        }]
+      },
+      options: opts,
+      plugins: [barValueLabels]
+    });
+  }
+
+  // ---- sensitivity exposure (Microsoft only) ----------------------------
+  function renderSensitivity(rows) {
+    var grounded = 0, labelled = 0;
+    var byLabel = new Map();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i][6].length > 0) grounded++;
+      var ids = rows[i][7];
+      if (ids.length === 0) continue;
+      labelled++;
+      for (var k = 0; k < ids.length; k++) {
+        var name = prettyLabel(DICT.labels[ids[k]]);
+        byLabel.set(name, (byLabel.get(name) || 0) + 1);
+      }
+    }
+
+    var pct = grounded ? Math.round((labelled / grounded) * 100) : 0;
+    var top = Array.from(byLabel.entries()).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
+    var maxVal = top.length ? top[0][1] : 1;
+
+    var html =
+      '<div class="text-3xl font-semibold tracking-tight" style="color:' +
+      (labelled > 0 ? 'var(--status-critical)' : 'inherit') + '">' + pct + '%</div>' +
+      '<div class="ink-3 mb-4 mt-1 text-xs">of grounded interactions touched labelled content</div>';
+
+    if (top.length === 0) {
+      html += '<div class="ink-3 text-xs">No sensitivity labels seen on any file the assistant read. ' +
+        'That can mean the content is genuinely unclassified, or that labelling is not deployed.</div>';
+    } else {
+      html += top.map(function (e) {
+        return '<div class="sens-row">' +
+          '<span class="text-xs" style="min-width:96px">' + esc(e[0]) + '</span>' +
+          '<span class="sens-bar"><span class="sens-fill" style="width:' +
+            Math.max(4, Math.round((e[1] / maxVal) * 100)) + '%"></span></span>' +
+          '<span class="tnum ink-2 text-xs">' + num(e[1]) + '</span>' +
+          '</div>';
+      }).join('');
+      if (sawGuidLabel) {
+        html += '<div class="ink-3 mt-3 text-xs">Purview reports labels as GUIDs. ' +
+          'Resolving display names needs an additional Graph permission this tool does not request.</div>';
+      }
+    }
+    document.getElementById('sensitivityPanel').innerHTML = html;
   }
 
   // ---- table ------------------------------------------------------------
@@ -728,26 +1079,35 @@ const TEMPLATE = `<!doctype html>
     var slice = rows.slice(state.page * PAGE_SIZE, state.page * PAGE_SIZE + PAGE_SIZE);
 
     document.getElementById('tableBody').innerHTML = slice.length === 0
-      ? '<tr><td colspan="6" class="ink-3 px-5 py-10 text-center">No interactions match these filters.</td></tr>'
+      ? '<tr><td colspan="' + (SINGLE ? 5 : 6) + '" class="ink-3 px-5 py-10 text-center">No interactions match these filters.</td></tr>'
       : slice.map(function (r) {
-          var resources = resourcesOf(r);
-          var extra = '';
-          if (resources.length > 3) extra = ' <span class="ink-3">+' + (resources.length - 3) + ' more</span>';
-          var cells = resources.slice(0, 3).map(function (x) {
-            return '<span class="chip">' + esc(x) + '</span>';
-          }).join(' ');
-          var labels = labelsOf(r).map(function (x) {
-            return '<span class="chip" style="border-color:var(--status-critical);color:var(--status-critical)">' + esc(x) + '</span>';
-          }).join(' ');
+          var last;
+          if (MODE === 'google') {
+            var sfc = surfaceOf(r);
+            last = sfc ? '<span class="chip">' + esc(sfc) + '</span>' : '<span class="ink-3">&mdash;</span>';
+          } else {
+            var resources = resourcesOf(r);
+            var extra = resources.length > 3
+              ? ' <span class="ink-3">+' + (resources.length - 3) + ' more</span>' : '';
+            var cells = resources.slice(0, 3).map(function (x) {
+              return '<span class="chip">' + esc(x) + '</span>';
+            }).join(' ');
+            var labels = labelsOf(r).map(function (x) {
+              return '<span class="chip" style="border-color:var(--status-critical);color:var(--status-critical)">' +
+                esc(prettyLabel(x)) + '</span>';
+            }).join(' ');
+            last = (cells || labels) ? cells + ' ' + labels + extra : '<span class="ink-3">&mdash;</span>';
+          }
           return '<tr class="border-b rule align-top">' +
             '<td class="tnum whitespace-nowrap px-5 py-3 ink-2">' + esc(fmtTime(r[0])) + '</td>' +
             '<td class="px-5 py-3 font-medium">' + esc(DICT.users[r[1]]) + '</td>' +
-            '<td class="px-5 py-3"><span class="chip" style="border-color:' +
+            (SINGLE ? '' :
+              '<td class="px-5 py-3"><span class="chip" style="border-color:' +
               (r[2] === 0 ? 'var(--series-1);color:var(--series-1)' : 'var(--series-2);color:var(--series-2)') +
-              '">' + esc(PROVIDER_LABELS[r[2]]) + '</span></td>' +
+              '">' + esc(PROVIDER_LABELS[r[2]]) + '</span></td>') +
             '<td class="px-5 py-3 ink-2">' + esc(DICT.apps[r[3]]) + '</td>' +
             '<td class="px-5 py-3 ink-2">' + esc(DICT.ops[r[4]]) + '</td>' +
-            '<td class="px-5 py-3">' + (cells || labels ? cells + ' ' + labels + extra : '<span class="ink-3">&mdash;</span>') + '</td>' +
+            '<td class="px-5 py-3">' + last + '</td>' +
             '</tr>';
         }).join('');
 
@@ -798,6 +1158,60 @@ const TEMPLATE = `<!doctype html>
       'ai-audit-lens v' + META.toolVersion + '  ·  generated ' + META.generatedAt.replace('T', ' ').slice(0, 19) + ' UTC';
   }
 
+  /**
+   * Retune the page for the platform in play.
+   *
+   * A tenant runs one assistant, so the provider dimension is noise: the split
+   * chart, the Platform column, and the Platform filter all collapse, and the
+   * vocabulary switches to the terms that platform's admins actually use.
+   */
+  function applyProviderChrome() {
+    var groundingSection = document.getElementById('groundingSection');
+    var surfaceCard = document.getElementById('surfaceCard');
+    var providerWrap = document.getElementById('providerFilterWrap');
+    var labelledWrap = document.getElementById('labelledWrap');
+    var thPlatform = document.getElementById('thPlatform');
+    var thResources = document.getElementById('thResources');
+
+    // Platform column and filter only earn their space in a mixed tenant.
+    providerWrap.hidden = SINGLE;
+    if (thPlatform) thPlatform.hidden = SINGLE;
+
+    groundingSection.hidden = !IS_MS;
+    labelledWrap.hidden = !IS_MS;
+    surfaceCard.hidden = MODE !== 'google';
+    // With the Gemini-only card hidden, a 3-column grid leaves a dead slot.
+    if (MODE !== 'google') {
+      var breakdown = document.getElementById('breakdownSection');
+      breakdown.classList.remove('xl:grid-cols-3');
+      breakdown.classList.add('xl:grid-cols-2');
+    }
+
+    if (IS_MS) {
+      document.getElementById('appsTitle').textContent = 'Copilot surfaces';
+      document.getElementById('appsSub').textContent = 'Which app Copilot was used from';
+      document.getElementById('opsTitle').textContent = 'Interaction types';
+      document.getElementById('opsSub').textContent = 'Chat versus agent-driven activity';
+      document.getElementById('appFilterLabel').textContent = 'Surface';
+      thResources.textContent = 'Files read';
+      document.getElementById('thApp').textContent = 'Surface';
+      document.getElementById('volumeSub').textContent =
+        'Copilot interactions per day across the selected window';
+    } else if (MODE === 'google') {
+      document.getElementById('appsTitle').textContent = 'Workspace apps';
+      document.getElementById('appsSub').textContent = 'Which app Gemini was used from';
+      document.getElementById('opsTitle').textContent = 'Actions requested';
+      document.getElementById('opsSub').textContent = 'What users asked Gemini to do';
+      document.getElementById('appFilterLabel').textContent = 'App';
+      // Google exposes no grounded-resource data, so the column would be an
+      // empty promise. Repurpose it for the invocation point instead.
+      thResources.textContent = 'Invoked from';
+      document.getElementById('thApp').textContent = 'App';
+      document.getElementById('volumeSub').textContent =
+        'Gemini interactions per day across the selected window';
+    }
+  }
+
   function populateFilters() {
     var providerSelect = document.getElementById('providerFilter');
     var present = new Set(ROWS.map(function (r) { return r[2]; }));
@@ -840,13 +1254,20 @@ const TEMPLATE = `<!doctype html>
   var chartsAvailable = typeof Chart !== 'undefined';
 
   function renderAll() {
-    renderKpis(state.view);
+    var offStats = renderKpis(state.view);
+    renderHeatmap(state.view, offStats);
     if (chartsAvailable) {
       renderVolume(state.view);
       renderRanked('users', 'usersChart', state.view, function (r) { return DICT.users[r[1]]; }, 10, false);
       renderRanked('apps', 'appsChart', state.view, function (r) { return DICT.apps[r[3]]; }, 8, true);
       renderRanked('ops', 'opsChart', state.view, function (r) { return DICT.ops[r[4]]; }, 8, true);
+      if (IS_MS) {
+        renderDocuments(state.view);
+      } else if (MODE === 'google') {
+        renderRanked('surface', 'surfaceChart', state.view, surfaceOf, 8, true);
+      }
     }
+    if (IS_MS) renderSensitivity(state.view);
     renderTable();
   }
 
@@ -904,8 +1325,12 @@ const TEMPLATE = `<!doctype html>
   document.getElementById('appFilter').addEventListener('change', function (e) {
     state.app = e.target.value; applyFilters();
   });
+  document.getElementById('labelledFilter').addEventListener('change', function (e) {
+    state.labelled = e.target.checked; applyFilters();
+  });
   document.getElementById('resetFilters').addEventListener('click', function () {
-    state.q = ''; state.provider = ''; state.app = '';
+    state.q = ''; state.provider = ''; state.app = ''; state.labelled = false;
+    document.getElementById('labelledFilter').checked = false;
     document.getElementById('q').value = '';
     document.getElementById('providerFilter').value = '';
     document.getElementById('appFilter').value = '';
@@ -932,6 +1357,7 @@ const TEMPLATE = `<!doctype html>
   // ---- boot -------------------------------------------------------------
   document.documentElement.setAttribute('data-theme', currentTheme());
   if (!chartsAvailable) degradeCharts();
+  applyProviderChrome();
   renderChrome();
   renderBanners();
   populateFilters();

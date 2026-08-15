@@ -49,6 +49,9 @@ ${style.bold('GENERAL')}
   --json                  Also write normalised events as JSON to stdout
   --verbose               Log URLs, status codes, and retry decisions
   --demo                  Generate a synthetic report; no network, no auth
+  --demo-provider <p>     microsoft | google | both  (default microsoft)
+                          Real tenants run one assistant, so the sample data
+                          models one. "both" exercises the mixed-tenant view.
   --version, --help
 
 ${style.bold('PRIVACY')}
@@ -116,6 +119,7 @@ function parseConfig(argv: string[]): CliConfig {
       json: { type: 'boolean', default: false },
       verbose: { type: 'boolean', default: false },
       demo: { type: 'boolean', default: false },
+      'demo-provider': { type: 'string' },
       pseudonymize: { type: 'boolean', default: false },
       'include-raw': { type: 'boolean', default: false },
       'save-session': { type: 'boolean', default: false },
@@ -203,6 +207,12 @@ function parseConfig(argv: string[]): CliConfig {
     pseudonymize: values.pseudonymize === true,
     includeRaw: values['include-raw'] === true,
     demo: values.demo === true,
+    demoProvider: (function () {
+      const raw = values['demo-provider'];
+      if (raw === undefined) return 'microsoft' as const;
+      if (raw === 'microsoft' || raw === 'google' || raw === 'both') return raw;
+      throw new ConfigError('--demo-provider must be "microsoft", "google", or "both".');
+    })(),
     outPath: values.out,
     microsoft:
       msTenant && msClientId

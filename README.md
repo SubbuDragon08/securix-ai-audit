@@ -64,8 +64,6 @@ at all, vendor both libraries into `TEMPLATE` in [`src/report.ts`](src/report.ts
 
 ---
 
----
-
 ## Linux clients
 
 Fully supported. The app is the same Electron binary; only packaging and one
@@ -321,16 +319,46 @@ The same escape hatch exists for Google: `--google-apps gemini_in_workspace_apps
 A single HTML file, openable offline (Tailwind and Chart.js load from CDN; everything
 else is inline), that works in light and dark mode:
 
-- **KPI tiles** — total interactions, active users, busiest day, and how many
-  interactions were *grounded on tenant data* with a count of those touching
-  sensitivity-labelled content.
-- **Prompt volume over time** — daily interactions, split by platform when both are present.
-- **Top users** — the ten heaviest users.
-- **Surfaces** and **Activity types** — where the assistant was invoked and what it was asked to do.
-- **Interaction log** — searchable, sortable, paginated, with the grounded resources per
-  row and CSV export (generated in-browser; nothing is uploaded).
+**The report adapts to the assistant you actually run.** An organisation has Copilot
+*or* Gemini — whichever came bundled with its productivity suite — so the platform
+dimension is dropped entirely: no split charts, no Platform column, no platform
+filter. That space goes to widgets specific to the platform in play, and the
+vocabulary switches to the terms those admins use.
+
+**Both platforms:**
+
+- **KPI tiles** — interactions with an adoption trend against the first half of the
+  window, active users, busiest day, and a platform-specific fourth tile.
+- **Prompt volume over time** — daily interactions.
+- **Top users** — the ten heaviest.
+- **When the assistant is used** — a day × hour heatmap. Concentration outside
+  08:00–18:00 is called out numerically, because off-hours AI activity is a
+  security signal, not just an adoption one.
+- **Interaction log** — searchable, sortable, paginated, CSV export generated
+  in-browser.
+
+**Microsoft only** — Copilot names the tenant files it grounded each answer on:
+
+- **Most-read tenant files** — which documents Copilot opened, and how many distinct
+  people triggered each one.
+- **Sensitivity exposure** — share of grounded interactions that reached labelled
+  content, broken down by label.
+- **Only labelled content** filter, and a **Read tenant files** KPI.
+
+**Google only** — the Reports API exposes actions rather than resources:
+
+- **Actions requested** — generate, summarise, converse, refine.
+- **Invocation points** — which UI entry point users reached for (`feature_source`).
+- An **Outside work hours** KPI in place of the grounding tile.
 
 Every filter re-scopes the whole page, so the charts and the table never disagree.
+
+Preview either without a tenant:
+
+```bash
+npm run cli -- --demo                          # Copilot (default)
+npm run cli -- --demo --demo-provider google   # Gemini
+```
 
 ---
 

@@ -60,6 +60,8 @@ export interface RunConfig {
   pseudonymize: boolean;
   includeRaw: boolean;
   demo: boolean;
+  /** Which platform --demo should simulate. Real orgs run exactly one. */
+  demoProvider?: 'microsoft' | 'google' | 'both';
   outPath?: string;
   microsoft?: MicrosoftRunConfig;
   google?: GoogleRunConfig;
@@ -229,9 +231,9 @@ export async function runAudit(config: RunConfig, hooks: RunHooks): Promise<RunO
 
   if (config.demo) {
     log.step('Demo mode — synthetic data, no network calls');
-    const demo = buildDemoData(config.days);
+    const demo = buildDemoData(config.days, config.demoProvider ?? 'microsoft');
     results = demo.results;
-    tenantLabel = 'contoso.com (demo data)';
+    tenantLabel = 'contoso.com (sample data)';
     log.ok(`Generated ${demo.events.length.toLocaleString()} synthetic interactions.`);
   } else {
     results = [];

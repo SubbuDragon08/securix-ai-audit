@@ -307,12 +307,11 @@ export function normalizeGoogle(
         // the event name, which is always `feature_utilization`.
         operation: titleCase(action ?? event.name ?? 'feature_utilization'),
         clientIp: activity.ipAddress,
-        // Not resources in the Purview sense — Google does not expose grounded
-        // files — but the UI surface is the closest available context.
-        accessedResources: dedupe([
-          featureSource ? `Surface: ${titleCase(featureSource)}` : undefined,
-          category ? `Category: ${titleCase(category)}` : undefined,
-        ]),
+        surface: featureSource ? titleCase(featureSource) : category ? titleCase(category) : undefined,
+        // Google exposes no grounded-resource data at all. Leaving this empty —
+        // rather than padding it with UI metadata — keeps "grounded on tenant
+        // data" an honest measure, and is why that tile is Microsoft-only.
+        accessedResources: [],
         sensitivityLabels: [],
         ...(opts.includeRaw ? { raw: activity } : {}),
       });

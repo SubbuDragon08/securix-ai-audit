@@ -45,6 +45,12 @@ const GOOGLE_APPS: Array<[string, number]> = [
   ['Gmail', 30], ['Docs', 24], ['Gemini App', 18], ['Meet', 12],
   ['Sheets', 9], ['Slides', 5], ['Chat', 2],
 ];
+/** `feature_source` values: where in the UI Gemini was invoked. */
+const GEMINI_SURFACES: Array<[string, number]> = [
+  ['Help Me Write', 30], ['Side Panel', 28], ['Smart Reply', 14],
+  ['Summary Card', 12], ['Toolbar', 9], ['Slash Command', 7],
+];
+
 const GOOGLE_OPS: Array<[string, number]> = [
   ['Generate Text', 34], ['Summarize', 26], ['Conversation', 22],
   ['Refine Text', 11], ['Generate Image', 7],
@@ -73,10 +79,21 @@ function weightedPick<T>(rand: () => number, table: Array<[T, number]>): T {
 const skewedIndex = (rand: () => number, length: number): number =>
   Math.min(length - 1, Math.floor(Math.pow(rand(), 2.1) * length));
 
-export function buildDemoData(days: number): {
+/**
+ * @param provider Which platform to simulate. Defaults to Microsoft because a
+ *   real organisation runs one assistant, not both — whichever came bundled
+ *   with their productivity suite. `both` exists only to exercise the
+ *   mixed-tenant code path.
+ */
+export function buildDemoData(
+  days: number,
+  provider: 'microsoft' | 'google' | 'both' = 'microsoft',
+): {
   events: PromptEvent[];
   results: ProviderResult[];
 } {
+  const wantMs = provider === 'microsoft' || provider === 'both';
+  const wantGoogle = provider === 'google' || provider === 'both';
   const rand = seededRandom(20260812);
   const events: PromptEvent[] = [];
   const now = Date.now();
@@ -92,8 +109,12 @@ export function buildDemoData(days: number): {
     const weekendFactor = weekday === 0 || weekday === 6 ? 0.18 : 1;
     const growth = 0.75 + ((days - day) / days) * 0.6;
 
-    const msToday = Math.round((90 + rand() * 60) * weekendFactor * growth);
-    const googleToday = Math.round((45 + rand() * 35) * weekendFactor * growth);
+    // A single-provider tenant carries the whole load, so the volume is the
+    // same either way — otherwise the Google-only demo would look anaemic.
+    const msToday = wantMs ? Math.round((90 + rand() * 60) * weekendFactor * growth) : 0;
+    const googleToday = wantGoogle
+      ? Math.round((provider === 'google' ? 95 + rand() * 60 : 45 + rand() * 35) * weekendFactor * growth)
+      : 0;
 
     for (let i = 0; i < msToday; i++) {
       // Business hours with a lunch dip.
@@ -102,8 +123,10 @@ export function buildDemoData(days: number): {
       ts.setUTCHours(hour, Math.floor(rand() * 60), Math.floor(rand() * 60), 0);
 
       const touchesData = rand() < 0.42;
+      // Skewed, not uniform: real tenants have a handful of hot documents that
+      // the assistant reaches for constantly, and a long tail it barely touches.
       const resources = touchesData
-        ? Array.from({ length: 1 + Math.floor(rand() * 3) }, () => RESOURCES[Math.floor(rand() * RESOURCES.length)]!)
+        ? Array.from({ length: 1 + Math.floor(rand() * 3) }, () => RESOURCES[skewedIndex(rand, RESOURCES.length)]!)
         : [];
       const labelled = touchesData && rand() < 0.28;
 
@@ -134,28 +157,35 @@ export function buildDemoData(days: number): {
         app: weightedPick(rand, GOOGLE_APPS),
         operation: weightedPick(rand, GOOGLE_OPS),
         clientIp: `10.${40 + Math.floor(rand() * 4)}.${Math.floor(rand() * 255)}.${Math.floor(rand() * 255)}`,
-        accessedResources: rand() < 0.5 ? [`Surface: ${rand() < 0.5 ? 'Help Me Write' : 'Side Panel'}`] : [],
+        surface: weightedPick(rand, GEMINI_SURFACES),
+        // Google exposes no grounded-resource data — see normalize.ts.
+        accessedResources: [],
         sensitivityLabels: [],
       });
     }
   }
 
-  const results: ProviderResult[] = [
-    {
+  // Only report on providers actually simulated — an empty second provider
+  // would render a "0 interactions" card for a platform the org does not own.
+  const results: ProviderResult[] = [];
+  if (wantMs) {
+    results.push({
       provider: 'microsoft',
       events: events.filter((e) => e.provider === 'microsoft'),
       truncated: false,
       warnings: [],
       diagnostics: { mode: 'demo', source: 'synthetic' },
-    },
-    {
+    });
+  }
+  if (wantGoogle) {
+    results.push({
       provider: 'google',
       events: events.filter((e) => e.provider === 'google'),
       truncated: false,
       warnings: [],
       diagnostics: { mode: 'demo', source: 'synthetic' },
-    },
-  ];
+    });
+  }
 
   return { events, results };
 }

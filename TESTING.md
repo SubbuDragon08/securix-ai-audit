@@ -136,6 +136,8 @@ and `admin.googleapis.com`. Nothing goes to securix.app.
 
 ```bash
 npm run cli -- --demo --days 30            # bigger synthetic dataset
+npm run cli -- --demo --demo-provider google   # the Gemini report layout
+npm run cli -- --demo --demo-provider both     # mixed-tenant comparison view
 npm run cli -- --demo --pseudonymize       # alias mode
 npm run cli -- --demo --json > events.json # normalised events
 npm run cli -- --verbose ...               # every URL, status code, retry

@@ -29,6 +29,11 @@ export interface PromptEvent {
   app: string;
   /** Provider-native operation / event name, kept verbatim for forensics. */
   operation: string;
+  /**
+   * Where in the UI the assistant was invoked from (Google `feature_source`:
+   * "Help Me Write", "Side Panel"). Microsoft does not expose an equivalent.
+   */
+  surface?: string;
   /** Caller IP when the audit record exposes one. */
   clientIp?: string;
   /** Model name when the provider reports it (Copilot ModelTransparencyDetails). */
