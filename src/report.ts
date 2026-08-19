@@ -337,6 +337,16 @@ const TEMPLATE = `<!doctype html>
     border-radius: 9px;
   }
   .field:focus { outline: 2px solid var(--series-1); outline-offset: 1px; }
+  /* Icon-only theme toggle. The 20px icon box matches the 20px line-height of
+     the sibling text buttons, so both end up exactly 38px tall. */
+  .theme-toggle { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .theme-toggle svg { display: block; width: 20px; height: 20px; }
+  .theme-toggle:hover { background: var(--wash); }
+  /* Show the theme you would switch TO: moon while light, sun while dark.
+     Boot always writes an explicit data-theme, so these two rules cover it. */
+  .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
   /* Tabular figures only where digits stack vertically. Hero numbers keep
      proportional figures so they do not read loose at display size. */
   .tnum { font-variant-numeric: tabular-nums; }
@@ -385,7 +395,10 @@ const TEMPLATE = `<!doctype html>
     </div>
     <div class="no-print flex items-center gap-2">
       <button id="exportCsv" class="field px-3 py-2 text-sm font-medium">Export CSV</button>
-      <button id="themeToggle" class="field px-3 py-2 text-sm font-medium" aria-label="Toggle colour theme">Theme</button>
+      <button id="themeToggle" type="button" class="field theme-toggle px-2 py-2" aria-label="Switch to dark theme" title="Switch to dark theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
     </div>
   </header>
 
@@ -1278,8 +1291,15 @@ const TEMPLATE = `<!doctype html>
     if (stored === 'dark' || stored === 'light') return stored;
     return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
+  function syncThemeLabel() {
+    var btn = document.getElementById('themeToggle');
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    btn.setAttribute('aria-label', 'Switch to ' + next + ' theme');
+    btn.setAttribute('title', 'Switch to ' + next + ' theme');
+  }
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    syncThemeLabel();
     try { localStorage.setItem('ai-audit-lens-theme', theme); } catch (e) {}
     // Chart.js bakes colours in at construction; re-create on theme change.
     renderAll();
@@ -1356,6 +1376,7 @@ const TEMPLATE = `<!doctype html>
 
   // ---- boot -------------------------------------------------------------
   document.documentElement.setAttribute('data-theme', currentTheme());
+  syncThemeLabel();
   if (!chartsAvailable) degradeCharts();
   applyProviderChrome();
   renderChrome();
