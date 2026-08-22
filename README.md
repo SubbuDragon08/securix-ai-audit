@@ -512,6 +512,48 @@ exports `ELECTRON_RUN_AS_NODE=1`, which would otherwise make Electron boot as pl
 Node and fail with `Cannot read properties of undefined (reading 'whenReady')`.
 `scripts/start-app.mjs` strips it.
 
+## Download
+
+Get the latest installers from the
+**[Releases page](https://github.com/SubbuDragon08/FreeTool/releases)**.
+
+| Platform | File |
+|---|---|
+| Windows 10/11, Server (Desktop Experience) | `SecuriX AI Audit Setup <version> x64.exe` |
+| macOS (Apple Silicon / Intel) | `SecuriX AI Audit-<version>-arm64.dmg` / `.dmg` |
+| Linux | `.AppImage`, `.deb`, `.rpm` |
+
+Every release ships a `SHA256SUMS.txt`. Verify before you run it:
+
+```powershell
+# Windows
+Get-FileHash ".\SecuriX AI Audit Setup 0.1.0 x64.exe" -Algorithm SHA256
+Get-AuthenticodeSignature ".\SecuriX AI Audit Setup 0.1.0 x64.exe" | Format-List
+```
+
+```bash
+# macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt
+```
+
+### Code signing
+
+Free code signing for Windows binaries is provided by
+**[SignPath.io](https://signpath.io/)**, with a certificate from the
+**[SignPath Foundation](https://signpath.org/)**.
+
+SignPath does not audit this code. Its signature attests that the binary was
+produced by this project's automated GitHub Actions build from the public source
+in this repository — a property you can verify yourself by re-running the build
+on any tag. Who may authorise a signature, and how a release is produced, is
+documented in [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+
+This application collects no data of any kind; see [PRIVACY.md](PRIVACY.md).
+
+macOS and Linux builds are not code signed yet.
+
+---
+
 ## Documentation
 
 | Document | What it covers |
