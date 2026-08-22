@@ -1,0 +1,160 @@
+[
+  {
+    "_case": "Standard Copilot Chat interaction grounded on two labelled files",
+    "id": "a1b2c3d4-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T09:14:22Z",
+    "auditLogRecordType": "copilotInteraction",
+    "operation": "CopilotInteraction",
+    "organizationId": "00000000-aaaa-bbbb-cccc-000000000001",
+    "userType": "regular",
+    "userId": "A.Okafor@Contoso.com",
+    "service": "Copilot",
+    "userPrincipalName": "A.Okafor@Contoso.com",
+    "clientIp": "203.0.113.24",
+    "auditData": {
+      "CreationTime": "2026-08-20T09:14:22",
+      "Id": "a1b2c3d4-1111-2222-3333-444455556666",
+      "Operation": "CopilotInteraction",
+      "OrganizationId": "00000000-aaaa-bbbb-cccc-000000000001",
+      "RecordType": 261,
+      "UserKey": "i:0h.f|membership|10032000abcdef@live.com",
+      "UserType": 0,
+      "Version": 1,
+      "Workload": "Copilot",
+      "UserId": "A.Okafor@Contoso.com",
+      "AppIdentity": "Microsoft Teams",
+      "ClientIP": "203.0.113.24",
+      "CopilotEventData": {
+        "AppHost": "bizchat",
+        "ThreadId": "19:meeting_abc123@thread.v2",
+        "MessageIds": ["msg-1", "msg-2"],
+        "AccessedResources": [
+          {
+            "Action": "Read",
+            "Id": "b!longsharepointidentifier",
+            "Name": "FY26 Headcount Plan.xlsx",
+            "Type": "File",
+            "SensitivityLabelId": "8faca7b8-8d20-48a3-8ea2-0f96310a848e",
+            "SiteUrl": "https://contoso.sharepoint.com/sites/finance/Shared%20Documents/"
+          },
+          {
+            "Action": "Read",
+            "Id": "b!anotheridentifier",
+            "Name": "Severance Policy v4.docx",
+            "Type": "File",
+            "SensitivityLabelId": "1f2e3d4c-5b6a-7988-9a0b-1c2d3e4f5a6b"
+          }
+        ],
+        "Contexts": [
+          { "Id": "https://contoso.sharepoint.com/sites/finance", "Type": "TeamsMeeting" }
+        ],
+        "ModelTransparencyDetails": [{ "ModelName": "gpt-4o" }],
+        "AISystemPlugin": [{ "Id": "sharepoint", "Name": "SharePoint" }]
+      }
+    }
+  },
+
+  {
+    "_case": "auditData delivered as a JSON STRING, which some workloads do",
+    "id": "b2c3d4e5-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T10:02:00Z",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "j.lindqvist@contoso.com",
+    "service": "Copilot",
+    "auditData": "{\"Operation\":\"CopilotInteraction\",\"Workload\":\"Copilot\",\"CopilotEventData\":{\"AppHost\":\"Word\",\"AccessedResources\":[{\"Name\":\"Board Deck Q3.pptx\",\"Type\":\"File\"}]}}"
+  },
+
+  {
+    "_case": "camelCase envelope and camelCase copilotEventData",
+    "id": "c3d4e5f6-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T11:30:45Z",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "p.raman@contoso.com",
+    "auditData": {
+      "copilotEventData": {
+        "appHost": "Outlook",
+        "accessedResources": [{ "name": "Q3 Forecast.xlsx", "type": "File" }]
+      }
+    }
+  },
+
+  {
+    "_case": "No envelope timestamp; must fall back to auditData.CreationTime",
+    "id": "d4e5f6a7-1111-2222-3333-444455556666",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "m.delacruz@contoso.com",
+    "auditData": {
+      "CreationTime": "2026-08-20T12:00:00Z",
+      "CopilotEventData": { "AppHost": "Excel" }
+    }
+  },
+
+  {
+    "_case": "No usable timestamp anywhere; must be DROPPED, not guessed",
+    "id": "e5f6a7b8-1111-2222-3333-444455556666",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "ghost@contoso.com",
+    "auditData": { "CopilotEventData": { "AppHost": "Teams" } }
+  },
+
+  {
+    "_case": "Agent surface: AIAppInteraction rather than CopilotInteraction",
+    "id": "f6a7b8c9-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T13:22:10Z",
+    "operation": "AIAppInteraction",
+    "userPrincipalName": "s.novak@contoso.com",
+    "auditData": {
+      "Operation": "AIAppInteraction",
+      "CopilotEventData": {
+        "AppHost": "Copilot Studio",
+        "ModelTransparencyDetails": [{ "ModelName": "gpt-4.1" }]
+      }
+    }
+  },
+
+  {
+    "_case": "Unknown AppHost must pass through title-cased, not blank",
+    "id": "a7b8c9d0-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T14:05:00Z",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "r.mbeki@contoso.com",
+    "auditData": { "CopilotEventData": { "AppHost": "some_new_surface" } }
+  },
+
+  {
+    "_case": "No userPrincipalName; must fall back to userId",
+    "id": "b8c9d0e1-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T15:40:00Z",
+    "operation": "CopilotInteraction",
+    "userId": "SYSTEM.Account@contoso.com",
+    "auditData": { "CopilotEventData": { "AppHost": "Teams" } }
+  },
+
+  {
+    "_case": "No CopilotEventData at all; must still produce a usable row",
+    "id": "c9d0e1f2-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T16:15:00Z",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "t.yamamoto@contoso.com",
+    "service": "Copilot",
+    "auditData": { "Operation": "CopilotInteraction", "Workload": "Copilot" }
+  },
+
+  {
+    "_case": "Duplicate resources in one record must be de-duplicated",
+    "id": "d0e1f2a3-1111-2222-3333-444455556666",
+    "createdDateTime": "2026-08-20T17:00:00Z",
+    "operation": "CopilotInteraction",
+    "userPrincipalName": "l.moreau@contoso.com",
+    "auditData": {
+      "CopilotEventData": {
+        "AppHost": "Teams",
+        "AccessedResources": [
+          { "Name": "Pricing Model 2026.xlsx", "Type": "File" },
+          { "Name": "Pricing Model 2026.xlsx", "Type": "File" },
+          { "Name": "Pricing Model 2026.xlsx", "Type": "File" }
+        ]
+      }
+    }
+  }
+]

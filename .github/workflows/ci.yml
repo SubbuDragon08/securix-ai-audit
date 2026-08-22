@@ -45,6 +45,12 @@ jobs:
       - name: Build desktop bundles
         run: npm run app:build
 
+      # Exercises the Microsoft parsing path against realistic Purview record
+      # shapes. That path cannot be tested against a live tenant here, and it is
+      # the one most likely to break first in a customer's tenant.
+      - name: Unit tests
+        run: node --test test/*.test.mjs
+
       # Exercises the full pipeline — normalise, aggregate, render, write —
       # without needing a tenant or any credential.
       - name: Smoke test the report pipeline

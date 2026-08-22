@@ -34,6 +34,7 @@
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
     "app": "npm run app:build && node scripts/start-app.mjs",
     "app:build": "node scripts/build-app.mjs",
     "app:icon": "node scripts/make-icon.mjs",
