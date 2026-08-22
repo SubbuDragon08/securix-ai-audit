@@ -65,7 +65,7 @@ sudo lsof -i -P -n | grep -i securix
 ```
 
 You will see connections only to the hosts listed above. The source is public at
-<https://github.com/SubbuDragon08/FreeTool> and the released binaries are built
+<https://github.com/SubbuDragon08/securix-ai-audit> and the released binaries are built
 from it by GitHub Actions.
 
 ## Your report is sensitive

@@ -17,7 +17,7 @@ signed, by design.
 | Requirement | Status | Notes |
 |---|---|---|
 | OSI-approved licence, no dual licensing | ✅ | MIT |
-| Public repository | ✅ | `github.com/SubbuDragon08/FreeTool` |
+| Public repository | ✅ | `github.com/SubbuDragon08/securix-ai-audit` |
 | No proprietary code | ✅ | Zero runtime dependencies |
 | Documented functionality | ✅ | README, DISTRIBUTION.md, TESTING.md |
 | Has an uninstaller | ✅ | NSIS installer registers one |
@@ -65,7 +65,7 @@ Go to <https://signpath.org/> and use the **Apply** link.
 You will be asked for the repository URL, a description, and the licence.
 Point them at:
 
-- Repository: `https://github.com/SubbuDragon08/FreeTool`
+- Repository: `https://github.com/SubbuDragon08/securix-ai-audit`
 - Code signing policy: `.../blob/master/CODE_SIGNING_POLICY.md`
 - Privacy policy: `.../blob/master/PRIVACY.md`
 - Release: the tag from Step 1

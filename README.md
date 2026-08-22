@@ -515,7 +515,7 @@ Node and fail with `Cannot read properties of undefined (reading 'whenReady')`.
 ## Download
 
 Get the latest installers from the
-**[Releases page](https://github.com/SubbuDragon08/FreeTool/releases)**.
+**[Releases page](https://github.com/SubbuDragon08/securix-ai-audit/releases)**.
 
 | Platform | File |
 |---|---|

@@ -70,5 +70,5 @@ and the exact list of hosts it contacts.
 
 Security issues, or any binary that appears to be signed but did not come from
 this repository, should be reported by opening an issue at
-<https://github.com/SubbuDragon08/FreeTool/issues> or by emailing
+<https://github.com/SubbuDragon08/securix-ai-audit/issues> or by emailing
 <subramanyan.b@catalystops.in>.
