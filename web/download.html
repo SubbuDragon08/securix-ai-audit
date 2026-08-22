@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free AI Prompt Audit for Microsoft 365 and Google Workspace — SecuriX</title>
+<meta name="description" content="A free desktop tool that reports which employees are sending company data to Copilot and Gemini. Runs entirely on your machine. No data leaves your network.">
+
+<!--
+  Reference implementation of the download page.
+
+  Self-contained on purpose: no framework, no build step, no dependencies, so it
+  can be dropped onto the marketing site as-is or have its markup ported into
+  whatever the site is built with.
+
+  Two things it does that a hand-written page would not:
+
+  1. Reads the latest release from the GitHub API, so version numbers, file
+     names, and sizes never go stale after a release. Falls back to static links
+     if the API is unreachable or rate-limited (60 requests/hour per IP,
+     unauthenticated — a real risk on a page that gets traffic), and caches in
+     sessionStorage so a visitor only costs one request.
+
+  2. Detects the visitor's platform and leads with the matching download.
+
+  TODO before going live:
+    - Wire submitLead() to your CRM or form endpoint.
+    - Replace FALLBACK_ASSETS after the first release, so the page still works
+      when the API is rate-limited.
+-->
+
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #ffffff;
+    --surface-2: #f2f1ed;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-3: #898781;
+    --border: rgba(11, 11, 11, 0.11);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --shadow: 0 1px 2px rgba(11,11,11,.05), 0 8px 28px rgba(11,11,11,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232322;
+      --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #898781;
+      --border: rgba(255,255,255,.12); --accent: #3987e5;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: clamp(32px, 5vw, 46px); line-height: 1.12; letter-spacing: -.02em; margin: 0 0 16px; }
+  h2 { font-size: 24px; letter-spacing: -.01em; margin: 0 0 8px; }
+  h3 { font-size: 16px; margin: 0 0 4px; }
+  p  { margin: 0 0 14px; }
+  .lead { font-size: 19px; color: var(--ink-2); max-width: 62ch; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 14px; }
+  .tiny  { font-size: 13px; color: var(--ink-3); }
+
+  header { padding: 64px 0 8px; }
+  .eyebrow {
+    display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+  }
+  section { padding: 40px 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; box-shadow: var(--shadow);
+  }
+  .grid-3 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; justify-content: center;
+    font: inherit; font-weight: 600; font-size: 15px;
+    padding: 13px 22px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+    text-decoration: none;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .field {
+    width: 100%; padding: 13px 14px; font: inherit; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  }
+  .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .gate-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .gate-row .field { flex: 1; min-width: 240px; }
+
+  .dl { display: flex; align-items: center; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--border); }
+  .dl:last-child { border-bottom: 0; }
+  .dl-icon { width: 34px; height: 34px; flex-shrink: 0; color: var(--ink-2); }
+  .dl-body { flex: 1; min-width: 0; }
+  .dl-name { font-weight: 600; }
+  .dl-meta { font-size: 13px; color: var(--ink-3); overflow-wrap: anywhere; }
+  .dl.primary { background: var(--surface-2); margin: 0 -12px; padding: 15px 12px; border-radius: 10px; border-bottom: 0; }
+
+  .notice {
+    border: 1px solid var(--border); border-left-width: 3px; border-radius: 10px;
+    padding: 14px 16px; font-size: 14px; line-height: 1.6; margin: 16px 0;
+    background: var(--surface);
+  }
+  .notice-warn { border-left-color: var(--warning); }
+  .notice-good { border-left-color: var(--good); }
+  .notice strong { display: block; margin-bottom: 3px; }
+
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--surface-2); border-radius: 6px;
+  }
+  code { padding: 2px 6px; font-size: 13px; }
+  pre { padding: 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; margin: 0 0 14px; }
+  pre code { background: none; padding: 0; }
+
+  details { border-top: 1px solid var(--border); padding: 14px 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 10px 0 0; color: var(--ink-2); font-size: 15px; }
+
+  .shot { width: 100%; border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+  footer { padding: 40px 0 64px; border-top: 1px solid var(--border); margin-top: 40px; color: var(--ink-3); font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Free tool</span>
+    <h1>Find out what your employees are telling Copilot.</h1>
+    <p class="lead">
+      A free desktop app that reads your own Microsoft 365 or Google Workspace audit
+      logs and shows you every AI prompt in the last 7 days — who, when, from which
+      app, and which internal files the assistant opened to answer.
+    </p>
+    <p class="lead" style="margin-top:-4px">
+      It runs entirely on your laptop. Nothing is sent to SecuriX.
+    </p>
+  </header>
+
+  <!-- ================= Download gate ================= -->
+  <section id="download">
+    <div class="card">
+
+      <div id="gate">
+        <h2>Get the free tool</h2>
+        <p class="muted small">Enter your work email and the download links appear below. No account, no trial, no credit card.</p>
+        <form class="gate-row" id="leadForm" novalidate>
+          <input class="field" id="email" type="email" name="email" required
+                 autocomplete="email" placeholder="you@yourcompany.com" aria-label="Work email">
+          <button class="btn" type="submit" id="gateBtn">Show downloads</button>
+        </form>
+        <p class="tiny" id="gateError" style="color:#d03b3b" hidden></p>
+        <p class="tiny" style="margin-top:10px">
+          We'll email you the report walkthrough. No spam, unsubscribe anytime.
+          See our <a href="/privacy">privacy policy</a>.
+        </p>
+      </div>
+
+      <div id="downloads" hidden>
+        <h2>Download <span class="muted" id="verLabel"></span></h2>
+        <p class="muted small" id="dlIntro">Pick your platform.</p>
+        <div id="dlList"></div>
+
+        <div class="notice notice-warn" id="unsignedNotice">
+          <strong>Windows will show a SmartScreen warning</strong>
+          This build is not yet code signed, so Windows shows
+          <em>“Windows protected your PC”</em>. Click <strong>More info → Run anyway</strong>.
+          You do not have to take our word for it — the app is open source and every
+          release publishes SHA-256 checksums you can verify before running.
+          <span id="signedNote" hidden></span>
+        </div>
+
+        <p class="tiny">
+          All files, checksums, and source:
+          <a id="ghLink" href="#" target="_blank" rel="noopener">GitHub releases</a>
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= What you get ================= -->
+  <section>
+    <h2>What you get</h2>
+    <p class="muted" style="max-width:62ch">
+      One self-contained HTML report, written to your Documents folder. Open it,
+      email it, attach it to a ticket.
+    </p>
+    <img class="shot" alt="The generated dashboard: interactions over time, top users, most-read tenant files, and sensitivity exposure."
+         src="https://raw.githubusercontent.com/SubbuDragon08/securix-ai-audit/master/docs/screenshot.png">
+
+    <div class="grid-3" style="margin-top:24px">
+      <div class="card">
+        <h3>Who is actually using it</h3>
+        <p class="muted small">Licence counts are not usage. See real interaction volumes per person, per app, per day.</p>
+      </div>
+      <div class="card">
+        <h3>What data the AI read</h3>
+        <p class="muted small">Copilot names the tenant files it opened to answer. See the documents it reaches for most.</p>
+      </div>
+      <div class="card">
+        <h3>Whether it touched classified content</h3>
+        <p class="muted small">Sensitivity labels on those files, resolved to real names, with the share of prompts that hit them.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Trust ================= -->
+  <section>
+    <h2>Why this is safe to run</h2>
+    <div class="notice notice-good">
+      <strong>There is no password field, and there never will be.</strong>
+      You sign in on Microsoft's or Google's own page. The app receives a scoped,
+      read-only, expiring token and never sees a credential.
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h3>Read-only</h3>
+        <p class="muted small">Every permission requested is read-only. Nothing in your tenant can be modified.</p>
+      </div>
+      <div class="card">
+        <h3>No backend</h3>
+        <p class="muted small">No telemetry, no licence check, no account. Point a proxy at it and check.</p>
+      </div>
+      <div class="card">
+        <h3>Open source</h3>
+        <p class="muted small">MIT licensed, built in public by GitHub Actions. Read every line.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Verify ================= -->
+  <section>
+    <h2>Verify your download</h2>
+    <p class="muted small">Every release ships a <code>SHA256SUMS.txt</code>.</p>
+<pre><code># Windows (PowerShell)
+Get-FileHash .\SecuriX*.exe -Algorithm SHA256
+
+# macOS / Linux
+shasum -a 256 -c SHA256SUMS.txt</code></pre>
+  </section>
+
+  <!-- ================= FAQ ================= -->
+  <section>
+    <h2>Questions</h2>
+
+    <details open>
+      <summary>What permissions does it ask for?</summary>
+      <p>
+        Microsoft: <code>AuditLogsQuery.Read.All</code> to read Copilot audit records, and
+        <code>SensitivityLabel.Read</code> to turn label IDs into readable names.
+        Google: <code>admin.reports.audit.readonly</code>. All read-only. You can revoke
+        Microsoft access under Enterprise applications in Entra at any time.
+      </p>
+    </details>
+
+    <details>
+      <summary>Does it read our actual prompts?</summary>
+      <p>
+        No. It reads metadata only — who, when, which app, and which files the assistant
+        opened. Prompt and response text lives in users' mailboxes and is never requested.
+      </p>
+    </details>
+
+    <details>
+      <summary>Does anything get sent to SecuriX?</summary>
+      <p>
+        No. There is no backend. The app contacts only Microsoft and Google endpoints to
+        fetch your own data. The report is written to your disk and stays there.
+      </p>
+    </details>
+
+    <details>
+      <summary>Who needs to run it?</summary>
+      <p>
+        Microsoft: an account with Audit Reader, Audit Manager, or Global Reader, and a
+        licence including Purview Audit. Google: a Super Admin, plus a Gemini for
+        Workspace licence. Google's Gemini audit logging starts from 2025-06-20.
+      </p>
+    </details>
+
+    <details>
+      <summary>Can I run it on Windows Server?</summary>
+      <p>
+        Yes, with Desktop Experience installed. Server Core has no GUI. For fleet
+        deployment the installer supports <code>/S</code> for silent install and
+        <code>/S /allusers</code> for machine-wide.
+      </p>
+    </details>
+
+    <details>
+      <summary>How long does it take?</summary>
+      <p>
+        Google returns in seconds. Microsoft's Purview audit search runs server-side and
+        commonly takes 5–20 minutes on a large tenant — the app shows a live timer and
+        can be cancelled at any point.
+      </p>
+    </details>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section>
+    <div class="card" style="text-align:center">
+      <h2>This shows sanctioned AI only</h2>
+      <p class="muted" style="max-width:56ch;margin:0 auto 18px">
+        Your report covers Copilot and Gemini — the AI your tenant knows about. It cannot
+        see ChatGPT, Claude, Cursor, or coding agents on personal accounts, because none
+        of that touches your audit log. That gap is what SecuriX closes.
+      </p>
+      <a class="btn" href="/">See how SecuriX works</a>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Free and open source under the MIT licence ·
+      <a href="https://github.com/SubbuDragon08/securix-ai-audit" target="_blank" rel="noopener">Source</a> ·
+      <a href="https://github.com/SubbuDragon08/securix-ai-audit/blob/master/PRIVACY.md" target="_blank" rel="noopener">Privacy</a>
+    </p>
+    <p class="tiny" id="signPathCredit" hidden>
+      Free code signing for Windows binaries provided by
+      <a href="https://signpath.io/" target="_blank" rel="noopener">SignPath.io</a>,
+      certificate by the
+      <a href="https://signpath.org/" target="_blank" rel="noopener">SignPath Foundation</a>.
+    </p>
+    <p class="tiny">
+      Not affiliated with Microsoft or Google. “Microsoft 365 Copilot”, “Microsoft Purview”,
+      “Google Workspace”, and “Gemini” are trademarks of their respective owners.
+    </p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var REPO = 'SubbuDragon08/securix-ai-audit';
+  var RELEASES_URL = 'https://github.com/' + REPO + '/releases';
+
+  // Set to true once SignPath signing is live — flips the SmartScreen warning
+  // into a "verify the signature" note and reveals the required attribution.
+  var SIGNED = false;
+
+  // Used when the GitHub API is unreachable or rate-limited (60/hour per IP
+  // unauthenticated). Update the version after each release so the page keeps
+  // working under traffic.
+  var FALLBACK_VERSION = 'v0.1.0';
+  var FALLBACK_ASSETS = [
+    { name: 'SecuriX AI Audit Setup 0.1.0 x64.exe', platform: 'windows' },
+    { name: 'SecuriX AI Audit-0.1.0-arm64.dmg',     platform: 'macos'   },
+    { name: 'SecuriX AI Audit-0.1.0.dmg',           platform: 'macos'   },
+    { name: 'SecuriX AI Audit-0.1.0.AppImage',      platform: 'linux'   },
+    { name: 'securix-ai-audit_0.1.0_amd64.deb',     platform: 'linux'   }
+  ];
+
+  var LABELS = {
+    windows: 'Windows 10, 11 and Server',
+    macos:   'macOS',
+    linux:   'Linux'
+  };
+
+  var ICONS = {
+    windows: '<path d="M3 5.7 13 4.3v8.2H3V5.7Zm0 12.6 10 1.4v-8.1H3v6.7ZM14.5 4.1 29 2v10.5H14.5V4.1Zm0 15.8L29 22V11.6H14.5v8.3Z" fill="currentColor"/>',
+    macos:   '<path d="M22 17.2c0 3 2.6 4 2.7 4-.1.1-.4 1.5-1.4 2.9-.9 1.2-1.8 2.5-3.2 2.5s-1.8-.8-3.4-.8-2.1.8-3.4.8-2.4-1.3-3.3-2.6c-1.9-2.7-3.3-7.6-1.4-10.9 1-1.6 2.7-2.7 4.5-2.7 1.4 0 2.6.9 3.5.9s2.4-1.1 4-1c.7 0 2.7.3 4 2.1-.1.1-2.4 1.4-2.4 4.2M18.8 6.6c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3.1 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.3-.6 3.1-1.5" fill="currentColor"/>',
+    linux:   '<path d="M16 2c-3 0-4.3 2.4-4.1 5.3.1 1.8-.2 2.7-1 3.9-1 1.4-2.4 3.3-2.9 5.7-.4 2-.2 3 .1 3.4.3.4.8.3 1.2.7.5.5.3 1.3.9 1.9.6.6 1.6.4 2.5.8.9.4 1.7 1.3 3.3 1.3s2.4-.9 3.3-1.3c.9-.4 1.9-.2 2.5-.8.6-.6.4-1.4.9-1.9.4-.4.9-.3 1.2-.7.3-.4.5-1.4.1-3.4-.5-2.4-1.9-4.3-2.9-5.7-.8-1.2-1.1-2.1-1-3.9C20.3 4.4 19 2 16 2Z" fill="currentColor"/>'
+  };
+
+  function detectPlatform() {
+    var ua = navigator.userAgent;
+    if (/Win/i.test(ua)) return 'windows';
+    if (/Mac/i.test(ua)) return 'macos';
+    if (/Linux|X11|CrOS/i.test(ua)) return 'linux';
+    return null;
+  }
+
+  function classify(name) {
+    if (/\.exe$/i.test(name)) return 'windows';
+    if (/\.dmg$/i.test(name)) return 'macos';
+    if (/\.(AppImage|deb|rpm)$/i.test(name)) return 'linux';
+    return null;
+  }
+
+  function fmtSize(bytes) {
+    if (!bytes) return '';
+    return (bytes / 1048576).toFixed(0) + ' MB';
+  }
+
+  function assetUrl(a, version) {
+    return a.browser_download_url ||
+      RELEASES_URL + '/download/' + version + '/' + encodeURIComponent(a.name);
+  }
+
+  function render(version, assets) {
+    var here = detectPlatform();
+    var list = document.getElementById('dlList');
+
+    // Real installers only — hide checksums and blockmaps from the list.
+    var usable = assets.filter(function (a) { return classify(a.name); });
+    usable.sort(function (a, b) {
+      var pa = classify(a.name) === here ? 0 : 1;
+      var pb = classify(b.name) === here ? 0 : 1;
+      return pa - pb || a.name.localeCompare(b.name);
+    });
+
+    list.innerHTML = usable.map(function (a, i) {
+      var plat = classify(a.name);
+      var isPrimary = i === 0 && plat === here;
+      return '<div class="dl' + (isPrimary ? ' primary' : '') + '">' +
+        '<svg class="dl-icon" viewBox="0 0 32 32" aria-hidden="true">' + (ICONS[plat] || '') + '</svg>' +
+        '<div class="dl-body">' +
+          '<div class="dl-name">' + LABELS[plat] + (isPrimary ? ' — detected' : '') + '</div>' +
+          '<div class="dl-meta">' + escapeHtml(a.name) + (a.size ? ' · ' + fmtSize(a.size) : '') + '</div>' +
+        '</div>' +
+        '<a class="btn' + (isPrimary ? '' : ' btn-ghost') + '" href="' + assetUrl(a, version) + '">Download</a>' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('verLabel').textContent = version || '';
+    document.getElementById('ghLink').href = RELEASES_URL;
+
+    if (SIGNED) {
+      var n = document.getElementById('unsignedNotice');
+      n.className = 'notice notice-good';
+      n.innerHTML = '<strong>Signed and verifiable</strong>' +
+        'Windows builds are signed by the SignPath Foundation. Right-click the installer ' +
+        '→ Properties → Digital Signatures to confirm before you run it.';
+      document.getElementById('signPathCredit').hidden = false;
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;'
+        : c === '"' ? '&quot;' : '&#39;';
+    });
+  }
+
+  function loadRelease() {
+    var cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem('securix-release')); } catch (e) {}
+    if (cached && cached.version) { render(cached.version, cached.assets); return; }
+
+    fetch('https://api.github.com/repos/' + REPO + '/releases/latest')
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        var payload = {
+          version: d.tag_name,
+          assets: (d.assets || []).map(function (a) {
+            return { name: a.name, size: a.size, browser_download_url: a.browser_download_url };
+          })
+        };
+        try { sessionStorage.setItem('securix-release', JSON.stringify(payload)); } catch (e) {}
+        render(payload.version, payload.assets);
+      })
+      .catch(function () {
+        // Rate-limited, offline, or no release yet — static links still work.
+        render(FALLBACK_VERSION, FALLBACK_ASSETS);
+      });
+  }
+
+  // ---- lead capture -------------------------------------------------------
+  function submitLead(email) {
+    // TODO: point this at your CRM / form endpoint. Keep it fire-and-forget so a
+    // failure never blocks the download — a broken form must not cost you the
+    // install, and the binaries are public on GitHub anyway.
+    //
+    // return fetch('/api/leads', {
+    //   method: 'POST',
+    //   headers: { 'content-type': 'application/json' },
+    //   body: JSON.stringify({ email: email, source: 'ai-audit-download' })
+    // });
+    return Promise.resolve();
+  }
+
+  var form = document.getElementById('leadForm');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('email');
+    var err = document.getElementById('gateError');
+    var value = input.value.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) {
+      err.textContent = 'Please enter a valid work email address.';
+      err.hidden = false;
+      input.focus();
+      return;
+    }
+    err.hidden = true;
+    document.getElementById('gateBtn').disabled = true;
+
+    submitLead(value).catch(function () {}).then(function () {
+      try { localStorage.setItem('securix-lead', '1'); } catch (e) {}
+      reveal();
+    });
+  });
+
+  function reveal() {
+    document.getElementById('gate').hidden = true;
+    document.getElementById('downloads').hidden = false;
+    loadRelease();
+  }
+
+  // Returning visitors should not re-enter their email to get the same file.
+  var seen = false;
+  try { seen = localStorage.getItem('securix-lead') === '1'; } catch (e) {}
+  if (seen || location.hash === '#downloads') reveal();
+})();
+</script>
+</body>
+</html>
