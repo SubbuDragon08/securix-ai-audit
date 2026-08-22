@@ -18,6 +18,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const buildDir = join(root, 'build');
 mkdirSync(buildDir, { recursive: true });
 
+// build/icon.png is committed. Regenerating it on every build would make CI
+// depend on a browser being installed and could produce byte-different output
+// across Chrome versions — both bad for a build that must be reproducible from
+// public source. Pass --force to deliberately re-render it.
+if (existsSync(join(buildDir, 'icon.png')) && !process.argv.includes('--force')) {
+  console.log('build/icon.png already present — skipping (use --force to re-render)');
+  process.exit(0);
+}
+
 const CHROME_CANDIDATES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',

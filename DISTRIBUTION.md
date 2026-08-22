@@ -326,8 +326,14 @@ https://login.microsoftonline.com/organizations/v2.0/adminconsent
 
 ## 2. Code signing  *(required before any public download)*
 
-You said you have neither certificate yet. The pipeline is wired and disabled in
-`electron-builder.yml` — here is what to buy and what to flip.
+**Windows is now free** — see **[SIGNING.md](SIGNING.md)** for the SignPath
+Foundation walkthrough, which is the recommended path and needs no certificate
+purchase. The CI pipeline, code signing policy, and privacy policy are all
+committed and ready.
+
+macOS still requires the $99/yr Apple Developer Program; there is no free
+equivalent. The rest of this section covers that, plus paid Windows options if
+SignPath declines.
 
 Unsigned, your users see:
 

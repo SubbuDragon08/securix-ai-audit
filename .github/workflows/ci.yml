@@ -1,0 +1,73 @@
+# Continuous integration.
+#
+# Beyond catching regressions, this workflow is evidence for SignPath Foundation
+# that binaries come from an automated, verifiable build of public source rather
+# than someone's laptop. Keep it green.
+
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only: CI never needs to write to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` (not `npm install`) so the lockfile is authoritative — the same
+      # inputs must produce the same output for the build to be verifiable.
+      - run: npm ci
+
+      - name: Typecheck (src + electron + renderer)
+        run: npm run typecheck
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Build desktop bundles
+        run: npm run app:build
+
+      # Exercises the full pipeline — normalise, aggregate, render, write —
+      # without needing a tenant or any credential.
+      - name: Smoke test the report pipeline
+        run: |
+          set -euo pipefail
+          node dist/index.js --demo --no-open --out /tmp/ci-copilot.html
+          node dist/index.js --demo --demo-provider google --no-open --out /tmp/ci-gemini.html
+
+          for f in /tmp/ci-copilot.html /tmp/ci-gemini.html; do
+            test -s "$f" || { echo "::error::$f was not written"; exit 1; }
+            grep -q 'id="audit-payload"' "$f" || { echo "::error::$f has no data payload"; exit 1; }
+            echo "ok: $f ($(wc -c < "$f") bytes)"
+          done
+
+      # The report embeds tenant data, so the set of hosts it can reach is a
+      # security claim in the README. Fail the build if that set ever grows.
+      - name: Assert no unexpected outbound hosts
+        run: |
+          set -euo pipefail
+          ALLOWED='login.microsoftonline.com|graph.microsoft.com|accounts.google.com|oauth2.googleapis.com|openidconnect.googleapis.com|admin.googleapis.com|www.googleapis.com|cdn.tailwindcss.com|cdn.jsdelivr.net|securix.app'
+          FOUND=$(grep -rhoE 'https://[a-zA-Z0-9.-]+' src electron | sed 's|https://||' | sort -u)
+          echo "$FOUND"
+          if echo "$FOUND" | grep -vE "^($ALLOWED)$"; then
+            echo "::error::An unexpected outbound host was introduced. Update the README claim or remove it."
+            exit 1
+          fi

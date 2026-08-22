@@ -1,0 +1,246 @@
+# Build every installer and get the Windows ones signed by SignPath Foundation.
+#
+# Why this exists in CI rather than on a laptop: SignPath Foundation signs
+# artifacts produced by a *trusted build system* from public source. A locally
+# built .exe cannot be signed, by design — the signature is meant to attest
+# "this binary came from that public commit", and only CI can prove that.
+#
+# Flow for Windows:
+#   build (unsigned)  ->  upload as a GitHub artifact
+#                     ->  SignPath signs it (a human approves each release)
+#                     ->  signed artifact comes back
+#                     ->  attached to the GitHub Release
+#
+# Configure once in the repository (Settings -> Secrets and variables -> Actions):
+#   Variable  SECURIX_ENTRA_CLIENT_ID     the multi-tenant Entra app id
+#   Variable  SIGNPATH_ORGANIZATION_ID    from the SignPath portal
+#   Variable  SIGNPATH_PROJECT_SLUG       from the SignPath portal
+#   Variable  SIGNPATH_SIGNING_POLICY     usually "release-signing"
+#   Variable  SIGNPATH_ARTIFACT_CONFIG    usually "initial" — must be an artifact
+#                                         configuration that signs the nested PE
+#                                         files inside the NSIS installer
+#   Secret    SIGNPATH_API_TOKEN          submitter token
+#
+# SECURIX_ENTRA_CLIENT_ID is a repository *variable*, not a secret, and that is
+# deliberate: it is a public OAuth client identifier, and anyone rebuilding this
+# tag from source must be able to reproduce the same binary. A hidden value baked
+# into the executable would undermine the verifiability the signature attests to.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: 'Submit Windows builds to SignPath'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # create the release and upload assets
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Windows — the only platform we can sign for free today
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (build + sign)
+    runs-on: windows-latest
+    outputs:
+      signed: ${{ steps.decide.outputs.sign }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      - name: Build installers
+        run: npm run dist:win
+        env:
+          SECURIX_ENTRA_CLIENT_ID: ${{ vars.SECURIX_ENTRA_CLIENT_ID }}
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          # Only the shippable installers; skip blockmaps and unpacked trees.
+          find release -maxdepth 1 -type f \( -name '*.exe' \) -exec cp {} out/ \;
+          ls -la out
+
+      # SignPath pulls the artifact from GitHub by id, so it must be uploaded first.
+      - name: Upload unsigned artifact
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: out/
+          if-no-files-found: error
+
+      - name: Decide whether to sign
+        id: decide
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.SIGNPATH_API_TOKEN }}" ] \
+             && { [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.sign }}" = "true" ]; }; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SignPath not configured or not requested — publishing unsigned Windows builds."
+          fi
+
+      # A human approves each signing request in SignPath before this returns.
+      # That manual gate is a Foundation requirement, not an optional step.
+      - name: Submit to SignPath
+        if: steps.decide.outputs.sign == 'true'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Approval is manual, so allow well over the 600s default.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed/
+
+      - name: Verify the signature actually applied
+        if: steps.decide.outputs.sign == 'true'
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem signed -Filter *.exe -Recurse | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            Write-Host "$($_.Name): $($sig.Status) — $($sig.SignerCertificate.Subject)"
+            if ($sig.Status -ne 'Valid') { $failed = $true }
+          }
+          if ($failed) { throw 'At least one artifact is not validly signed.' }
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+          if [ "${{ steps.decide.outputs.sign }}" = "true" ]; then
+            find signed -type f -name '*.exe' -exec cp {} dist-release/ \;
+          else
+            cp out/*.exe dist-release/
+          fi
+          ls -la dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist-release/
+
+  # ---------------------------------------------------------------------------
+  # macOS — unsigned until an Apple Developer ID exists ($99/yr, no free option)
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS (build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build installers
+        run: npm run dist:mac
+        env:
+          SECURIX_ENTRA_CLIENT_ID: ${{ vars.SECURIX_ENTRA_CLIENT_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: release/*.dmg
+
+  # ---------------------------------------------------------------------------
+  # Linux — no signing concept; AppImage/deb/rpm all build natively here
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      # fpm shells out to rpmbuild for the .rpm target and GitHub's runners do
+      # not ship it. Without this the job builds AppImage and .deb and silently
+      # skips rpm.
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Build packages
+        run: npm run dist:linux
+        env:
+          SECURIX_ENTRA_CLIENT_ID: ${{ vars.SECURIX_ENTRA_CLIENT_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+
+  # ---------------------------------------------------------------------------
+  # Publish
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish GitHub Release
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: assets
+
+      # Security buyers check these. Publishing them is cheap and expected.
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd assets
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true
+          body: |
+            ## Verifying this download
+
+            Windows installers are signed by **SignPath Foundation** on behalf of
+            this project. Right-click the `.exe` → Properties → Digital Signatures
+            to confirm, or run:
+
+            ```powershell
+            Get-AuthenticodeSignature ".\SecuriX AI Audit Setup ${{ github.ref_name }} x64.exe" | Format-List
+            ```
+
+            macOS and Linux builds are **not** code signed yet. On macOS you will
+            need to right-click → Open the first time.
+
+            Checksums for every asset are in `SHA256SUMS.txt`.
+
+            ---
+            Built from this tag by GitHub Actions. Windows code signing policy:
+            [CODE_SIGNING_POLICY.md](https://github.com/SubbuDragon08/FreeTool/blob/master/CODE_SIGNING_POLICY.md)

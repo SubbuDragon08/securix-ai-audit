@@ -69,28 +69,41 @@ dmg:
 # ---------------------------------------------------------------------------
 win:
   icon: build/icon.png
+  # arm64 matters for Windows-on-ARM laptops, which are increasingly common in
+  # the exact fleets this tool is aimed at.
   target:
     - target: nsis
-      arch: [x64]
+      arch: [x64, arm64]
     - target: portable
       arch: [x64]
-  # --- Enable once you have an OV or EV code-signing certificate ------------
-  # Modern electron-builder prefers a signing hook or azure-trusted-signing
-  # over the deprecated certificateFile/certificatePassword pair:
-  # azureSignOptions:
-  #   publisherName: "Your Org"
-  #   endpoint: "https://eus.codesigning.azure.net/"
-  #   codeSigningAccountName: "your-account"
-  #   certificateProfileName: "your-profile"
-  # --------------------------------------------------------------------------
+
+  # Version metadata is a SignPath Foundation requirement: the signing policy can
+  # enforce that ProductName and version in the PE resources match the project
+  # being signed. These are also what Windows shows in the file properties and
+  # what AppLocker publisher rules match on.
+  legalTrademarks: SecuriX
+  # Signing happens OUT OF BAND, in CI, via SignPath — see .github/workflows/
+  # release.yml and CODE_SIGNING_POLICY.md. electron-builder therefore produces
+  # unsigned binaries here and must not try to invoke signtool: a local
+  # "successful" signature would defeat the whole point, which is that the
+  # published binary is signed from a verifiable CI build of public source.
+  signAndEditExecutable: true
 
 nsis:
   oneClick: false
+  # Per-user by default so an analyst without local admin can still run it.
+  # Admins deploying to a server or a fleet can force machine-wide with
+  #   "SecuriX AI Audit Setup x.y.z.exe" /S /allusers
   perMachine: false
+  allowElevation: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: SecuriX AI Audit
+  # Deterministic installer name: the download page, the SHA256SUMS file, and
+  # the SignPath artifact configuration all reference it.
+  artifactName: ${productName} Setup ${version} ${arch}.${ext}
+  uninstallDisplayName: ${productName} ${version}
 
 # ---------------------------------------------------------------------------
 # Linux

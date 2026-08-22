@@ -67,8 +67,11 @@ if (!onLinux && !hasGnuAr(env)) {
   if (dir) env.PATH = `${dir}:${env.PATH}`;
 }
 
-const gnuAr = onLinux || hasGnuAr(env);
-const rpmbuild = onLinux || rpmCanTargetLinux();
+// Probe on every host, including Linux: a CI runner is a Linux box that
+// usually has GNU ar but *not* rpmbuild, and assuming otherwise turns a
+// successful AppImage+deb build into a failed job.
+const gnuAr = hasGnuAr(env);
+const rpmbuild = rpmCanTargetLinux();
 
 const targets = ['AppImage'];
 if (gnuAr) targets.push('deb');

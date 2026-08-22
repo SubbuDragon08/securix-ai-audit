@@ -512,6 +512,16 @@ exports `ELECTRON_RUN_AS_NODE=1`, which would otherwise make Electron boot as pl
 Node and fail with `Cannot read properties of undefined (reading 'whenReady')`.
 `scripts/start-app.mjs` strips it.
 
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [TESTING.md](TESTING.md) | Running it locally, with or without credentials |
+| [SIGNING.md](SIGNING.md) | Free Windows code signing via SignPath Foundation |
+| [DISTRIBUTION.md](DISTRIBUTION.md) | Entra registration, notarization, the download page |
+| [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) | Who can sign a release, and how |
+| [PRIVACY.md](PRIVACY.md) | What the tool collects (nothing) and how to verify that |
+
 ## Known limitations
 
 - **Purview latency is the bottleneck**, not collection. See the resume flow above.
