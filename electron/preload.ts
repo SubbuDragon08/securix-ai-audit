@@ -33,6 +33,10 @@ const api = {
   saveReportAs: (path: string) => ipcRenderer.invoke('app:saveReportAs', path),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
 
+  // Shadow AI & Agent Surface Scanner (Tab 2).
+  shadowScan: (options: { demo?: boolean }) => ipcRenderer.invoke('shadow:scan', options),
+  shadowCancel: () => ipcRenderer.invoke('shadow:cancel'),
+
   /**
    * Subscribe to progress. Returns an unsubscribe function.
    *

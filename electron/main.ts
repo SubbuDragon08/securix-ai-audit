@@ -38,6 +38,8 @@ import {
   VERSION,
   type RunConfig,
 } from '../src/run.js';
+import { buildDemoScan } from '../src/shadow/demo.js';
+import { runShadowScan } from '../src/shadow/scanner.js';
 import type { Provider } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
@@ -260,6 +262,7 @@ let mainWindow: BrowserWindow | null = null;
 let store: Store;
 let session: KeychainSessionStore;
 let currentRun: AbortController | null = null;
+let currentScan: AbortController | null = null;
 
 /** Hosts the app itself may open in the user's browser. */
 const EXTERNAL_ALLOWLIST = new Set([
@@ -557,6 +560,41 @@ function registerIpc(): void {
     if (canceled || !filePath) return { ok: false };
     writeFileSync(filePath, readFileSync(rawPath), { mode: 0o600 });
     return { ok: true, path: filePath };
+  });
+
+  // -------------------------------------------------------------------------
+  // Shadow AI & Agent Surface Scanner (Tab 2)
+  //
+  // Host-only scan (Layers A + B): reads the current user's own AI configs and
+  // fingerprints localhost. No consent gate needed — it touches no other
+  // machine. The authorised /24 network sweep (Layer C) is a later phase with
+  // its own gate; there is deliberately no IPC for it yet, so this build cannot
+  // scan the network by accident.
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('shadow:scan', async (_event, raw: unknown) => {
+    if (currentScan) return { ok: false, error: 'A scan is already running.' };
+
+    const input = (raw ?? {}) as { demo?: unknown };
+    if (input.demo === true) {
+      return { ok: true, report: buildDemoScan() };
+    }
+
+    const controller = new AbortController();
+    currentScan = controller;
+    try {
+      const report = await runShadowScan({ hostConfig: true, hostLive: true }, controller.signal);
+      return { ok: true, report };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    } finally {
+      currentScan = null;
+    }
+  });
+
+  ipcMain.handle('shadow:cancel', () => {
+    currentScan?.abort();
+    return { ok: true };
   });
 }
 

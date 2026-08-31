@@ -1,0 +1,5 @@
+{
+  "servers": {
+    "internal-api": { "type": "http", "url": "https://tools.corp.example/mcp" }
+  }
+}

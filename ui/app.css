@@ -6,41 +6,90 @@
  * query and an explicit data-theme, so neither can strand the other.
  */
 
+/*
+ * SecuriX brand theme, adopted from the marketing site's globals.css:
+ * indigo primary, cool near-white ground, Inter + JetBrains Mono, and the
+ * brand's sharp, low-radius corners. Chromium (Electron) renders oklch()
+ * natively, so the tokens are used verbatim rather than converted.
+ *
+ * Semantic names are kept (--page, --surface-1, --accent, …) so the existing
+ * markup needs no changes; only the values move to the SecuriX palette.
+ */
 :root {
   color-scheme: light;
-  --surface-1: #fcfcfb;
-  --surface-2: #f2f1ed;
-  --page: #f9f9f7;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.11);
-  --border-strong: rgba(11, 11, 11, 0.2);
-  --accent: #2a78d6;
-  --accent-ink: #ffffff;
-  --good: #0ca30c;
-  --warning: #fab219;
-  --critical: #d03b3b;
-  --wash: rgba(42, 120, 214, 0.07);
-  --shadow: 0 1px 2px rgba(11, 11, 11, 0.05), 0 6px 20px rgba(11, 11, 11, 0.05);
+  --page: oklch(0.9842 0.0034 247.8575);       /* background */
+  --surface-1: oklch(1 0 0);                    /* card */
+  --surface-2: oklch(0.967 0.0029 264.5419);    /* muted */
+  --text-primary: oklch(0.2795 0.0368 260.031); /* foreground */
+  --text-secondary: oklch(0.551 0.0234 264.3637);
+  --text-muted: oklch(0.651 0.019 264);
+  --border: oklch(0.8717 0.0093 258.3382);
+  --border-strong: oklch(0.78 0.012 258);
+  --accent: oklch(0.546 0.245 262.881);         /* primary indigo */
+  --accent-ink: oklch(1 0 0);
+  --good: oklch(0.62 0.17 150);
+  --warning: oklch(0.78 0.15 80);
+  --critical: oklch(0.6368 0.2078 25.3313);     /* destructive */
+  --wash: color-mix(in oklch, var(--accent) 8%, transparent);
+  --radius: 2px;
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 6px 18px oklch(0 0 0 / 0.08);
+
+  /* Severity scale for the shadow-scanner findings. */
+  --sev-critical: oklch(0.6368 0.2078 25.3313);
+  --sev-high: oklch(0.68 0.19 45);
+  --sev-medium: oklch(0.80 0.14 85);
+  --sev-low: oklch(0.60 0.15 255);
+  --sev-info: oklch(0.60 0.02 264);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --surface-1: #1f1f1e;
-    --surface-2: #262625;
-    --page: #141413;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.12);
-    --border-strong: rgba(255, 255, 255, 0.22);
-    --accent: #3987e5;
-    --good: #0ca30c;
-    --wash: rgba(57, 135, 229, 0.14);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.3);
+    --page: oklch(0.2077 0.0398 265.7549);
+    --surface-1: oklch(0.2795 0.0368 260.031);
+    --surface-2: oklch(0.2427 0.0381 259.9437);
+    --text-primary: oklch(0.9288 0.0126 255.5078);
+    --text-secondary: oklch(0.7137 0.0192 261.3246);
+    --text-muted: oklch(0.62 0.017 261);
+    --border: oklch(0.4461 0.0263 256.8018);
+    --border-strong: oklch(0.52 0.026 257);
+    --accent: oklch(0.6801 0.1583 276.9349);
+    --accent-ink: oklch(0.2077 0.0398 265.7549);
+    --good: oklch(0.72 0.17 150);
+    --warning: oklch(0.82 0.15 85);
+    --critical: oklch(0.6368 0.2078 25.3313);
+    --wash: color-mix(in oklch, var(--accent) 16%, transparent);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 20px oklch(0 0 0 / 0.35);
+
+    --sev-critical: oklch(0.66 0.20 25);
+    --sev-high: oklch(0.72 0.18 48);
+    --sev-medium: oklch(0.83 0.14 88);
+    --sev-low: oklch(0.70 0.15 268);
+    --sev-info: oklch(0.70 0.02 264);
   }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: oklch(0.2077 0.0398 265.7549);
+  --surface-1: oklch(0.2795 0.0368 260.031);
+  --surface-2: oklch(0.2427 0.0381 259.9437);
+  --text-primary: oklch(0.9288 0.0126 255.5078);
+  --text-secondary: oklch(0.7137 0.0192 261.3246);
+  --text-muted: oklch(0.62 0.017 261);
+  --border: oklch(0.4461 0.0263 256.8018);
+  --border-strong: oklch(0.52 0.026 257);
+  --accent: oklch(0.6801 0.1583 276.9349);
+  --accent-ink: oklch(0.2077 0.0398 265.7549);
+  --good: oklch(0.72 0.17 150);
+  --warning: oklch(0.82 0.15 85);
+  --critical: oklch(0.6368 0.2078 25.3313);
+  --wash: color-mix(in oklch, var(--accent) 16%, transparent);
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 20px oklch(0 0 0 / 0.35);
+  --sev-critical: oklch(0.66 0.20 25);
+  --sev-high: oklch(0.72 0.18 48);
+  --sev-medium: oklch(0.83 0.14 88);
+  --sev-low: oklch(0.70 0.15 268);
+  --sev-info: oklch(0.70 0.02 264);
 }
 
 * { box-sizing: border-box; }
@@ -50,7 +99,8 @@ html, body {
   padding: 0;
   background: var(--page);
   color: var(--text-primary);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Inter is the SecuriX brand face; falls back to the system sans if absent. */
+  font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -345,3 +395,170 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.42); }
 dialog h2 { margin-bottom: 4px; }
 dialog h3 { margin: 17px 0 4px; font-size: 13px; }
 dialog form { margin-top: 18px; }
+
+/* ================================================================
+   SecuriX brand overrides + Shadow Scanner (Tab 2)
+   ================================================================ */
+
+/* The brand uses sharp corners: collapse the rounded radii to --radius.
+   Circles (spinner, badge) keep their own 50% rule, declared earlier. */
+.step, .card, .field, .btn, .notice, .console, .copy-row, .pill, dialog,
+.tabbar, .tab, .sev-tile, .finding, .rego, .cta, .consent {
+  border-radius: var(--radius);
+}
+/* Brand mono face for code-like surfaces. */
+code, .console, #resultPath, .rego pre, .mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------------------------------------------------------------- tabs */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  width: fit-content;
+}
+.tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab[aria-selected="true"] {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+.tab .tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  background: var(--critical);
+  color: #fff;
+}
+.tab-panel[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- scanner intro */
+.scan-intro { margin-bottom: 16px; }
+.scan-intro p { margin: 6px 0 0; }
+.scan-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-top: 4px; }
+.scan-hint { margin: 12px 0 0; }
+
+/* ---------------------------------------------------------------- severity summary */
+.sev-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.sev-tile {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--sev-info);
+  background: var(--surface-1);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+.sev-tile.c-critical { border-top-color: var(--sev-critical); }
+.sev-tile.c-high { border-top-color: var(--sev-high); }
+.sev-tile.c-medium { border-top-color: var(--sev-medium); }
+.sev-tile.c-low { border-top-color: var(--sev-low); }
+.sev-tile.c-info { border-top-color: var(--sev-info); }
+.sev-tile .n { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.sev-tile .lbl { font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+.scan-headline {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--critical);
+  background: color-mix(in oklch, var(--critical) 6%, var(--surface-1));
+}
+.scan-headline.clean { border-left-color: var(--good); background: color-mix(in oklch, var(--good) 7%, var(--surface-1)); }
+
+/* ---------------------------------------------------------------- findings */
+.findings { display: grid; gap: 12px; }
+.finding {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--sev-info);
+  background: var(--surface-1);
+  padding: 15px 16px;
+  box-shadow: var(--shadow);
+}
+.finding.c-critical { border-left-color: var(--sev-critical); }
+.finding.c-high { border-left-color: var(--sev-high); }
+.finding.c-medium { border-left-color: var(--sev-medium); }
+.finding.c-low { border-left-color: var(--sev-low); }
+.finding.c-info { border-left-color: var(--sev-info); }
+
+.finding-top { display: flex; align-items: baseline; gap: 10px; }
+.finding-top h3 { flex: 1; font-size: 14px; margin: 0; line-height: 1.4; }
+.sev-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  color: #fff;
+  border-radius: var(--radius);
+}
+.sev-badge.c-critical { background: var(--sev-critical); }
+.sev-badge.c-high { background: var(--sev-high); }
+.sev-badge.c-medium { background: var(--sev-medium); color: #201800; }
+.sev-badge.c-low { background: var(--sev-low); }
+.sev-badge.c-info { background: var(--sev-info); }
+
+.finding-pathway { margin: 9px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.finding-domains { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.domain {
+  font-size: 11px; padding: 2px 8px; border: 1px solid var(--border);
+  color: var(--text-secondary); background: var(--surface-2);
+  text-transform: capitalize;
+}
+.finding-evidence { margin: 11px 0 0; padding: 0; list-style: none; }
+.finding-evidence li {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 11.5px; color: var(--text-secondary);
+  padding: 3px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere;
+}
+.finding-evidence li:first-child { border-top: 0; }
+.finding-evidence .loc { color: var(--text-primary); }
+
+.finding-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 13px; }
+.control-tag {
+  font-size: 11.5px; font-weight: 600; padding: 3px 9px;
+  background: var(--wash); color: var(--accent); border: 1px solid transparent;
+}
+.rego-toggle {
+  appearance: none; background: none; border: none; font: inherit; font-size: 12px;
+  color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; padding: 0;
+}
+.rego { margin-top: 11px; }
+.rego[hidden] { display: none; }
+.rego pre {
+  margin: 0; padding: 12px 14px; background: var(--surface-2);
+  font-size: 11px; line-height: 1.5; overflow-x: auto; color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+/* ---------------------------------------------------------------- CTA */
+.cta {
+  margin-top: 20px; padding: 20px; text-align: center;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface-1));
+}
+.cta h2 { font-size: 17px; margin-bottom: 6px; }
+.cta p { max-width: 52ch; margin: 0 auto 14px; color: var(--text-secondary); }
+
+/* ---------------------------------------------------------------- clean state */
+.scan-clean { text-align: center; padding: 30px 20px; }
+.scan-clean .big { font-size: 40px; }

@@ -12,7 +12,7 @@
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuriX AI Audit</title>
+<title>SecuriX AI Audit & Shadow Scanner</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -31,11 +31,24 @@
       </svg>
     </div>
     <div class="head-text">
-      <h1>AI Prompt Audit</h1>
-      <p class="muted" id="tagline">See which employees are sending company data to Copilot and Gemini.</p>
+      <h1>SecuriX</h1>
+      <p class="muted" id="tagline">Audit sanctioned AI, and expose the shadow AI that bypasses it.</p>
     </div>
     <button class="link-btn" id="aboutBtn" type="button">About</button>
   </header>
+
+  <!-- ===================== Tabs ===================== -->
+  <div class="tabbar" role="tablist">
+    <button class="tab" id="tabBtnAudit" role="tab" aria-selected="true" type="button">Tenant Audit</button>
+    <button class="tab" id="tabBtnScanner" role="tab" aria-selected="false" type="button">
+      Shadow Scanner <span class="tab-count" id="scanTabCount" hidden></span>
+    </button>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- TAB 1 — Tenant Audit (Copilot / Gemini prompt logs)                  -->
+  <!-- ==================================================================== -->
+  <div id="tab-audit" class="tab-panel">
 
   <!-- ===================== Setup warning ===================== -->
   <section class="notice notice-warn" id="setupNotice" hidden>
@@ -268,10 +281,77 @@
     <p class="muted small" id="resultPath"></p>
   </section>
 
+  </div><!-- /tab-audit -->
+
+  <!-- ==================================================================== -->
+  <!-- TAB 2 — Shadow AI & Agent Surface Scanner                            -->
+  <!-- ==================================================================== -->
+  <div id="tab-scanner" class="tab-panel" hidden>
+
+    <!-- Run -->
+    <section class="step" id="scanRunStep">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <div>
+          <h2>Scan this machine for shadow AI</h2>
+          <p class="muted">Find the AI agents, MCP servers, and API keys on this host that can move
+            company data to external models — with no gateway, policy, or audit in between.</p>
+        </div>
+      </div>
+      <div class="scan-intro">
+        <p class="muted small">Run it on a developer workstation or a shared jump host. It reads this
+          machine's own AI client configurations and checks localhost. It is read-only, touches no
+          other machine, and sends nothing anywhere.</p>
+      </div>
+      <div class="scan-actions">
+        <button class="btn btn-run" id="scanBtn" type="button">Run scan</button>
+        <button class="btn btn-ghost" id="scanDemoBtn" type="button">Preview with sample findings</button>
+      </div>
+      <p class="muted small scan-hint" id="scanHint">
+        Scanning your local network for exposed agents arrives in a later version, behind an explicit
+        "I am authorised to scan this network" step.
+      </p>
+    </section>
+
+    <!-- Progress -->
+    <section class="step" id="scanProgressStep" hidden>
+      <div class="step-head">
+        <span class="step-num spin"></span>
+        <div>
+          <h2 id="scanProgressTitle">Scanning this machine</h2>
+          <p class="muted" id="scanProgressDetail">Starting&hellip;</p>
+        </div>
+        <button class="btn btn-ghost" id="scanCancelBtn" type="button">Cancel</button>
+      </div>
+      <pre class="console" id="scanConsole" aria-live="polite"></pre>
+    </section>
+
+    <!-- Results -->
+    <section id="scanResultStep" hidden>
+      <div class="scan-headline" id="scanHeadline"></div>
+      <div class="sev-row" id="sevRow"></div>
+      <div class="findings" id="findings"></div>
+
+      <div class="cta">
+        <h2>Take back control of your AI traffic</h2>
+        <p>Every finding above is a path by which your IP and client data can reach an external model.
+          SecuriX puts an <strong>LLM Gateway</strong> and a <strong>managed MCP Gateway</strong> in
+          front of all of them — so keys are held centrally, prompts are inspected, every tool call is
+          brokered and audited, and policy is enforced in Draft-Only mode first, so nothing breaks.</p>
+        <button class="btn btn-run" data-external="https://securix.app" type="button">See how SecuriX works</button>
+      </div>
+
+      <div class="run-row" style="margin-top:16px">
+        <button class="btn btn-ghost" id="scanAgainBtn" type="button">Run again</button>
+      </div>
+    </section>
+
+  </div><!-- /tab-scanner -->
+
   <!-- ===================== Footer ===================== -->
   <footer class="foot">
     <span class="muted small">
-      No data leaves this machine. Read-only access. Open source.
+      Read-only. Nothing is sent to SecuriX. Open source.
     </span>
     <button class="inline-link" data-external="https://securix.app" type="button" id="brandLink">
       SecuriX
@@ -289,11 +369,17 @@
     <li><strong>Microsoft:</strong> <code>SensitivityLabel.Read</code> &mdash; label names only, read-only.</li>
     <li><strong>Google:</strong> <code>admin.reports.audit.readonly</code> &mdash; Admin SDK reports, read-only.</li>
   </ul>
+  <h3>What the Shadow Scanner reads</h3>
+  <ul class="steps">
+    <li>This machine's own AI client configs, dotfiles, and localhost — read-only.</li>
+    <li>It records that a credential <em>exists</em> and where; it never reads the value.</li>
+    <li>It touches no other machine and sends nothing anywhere.</li>
+  </ul>
   <h3>What it never does</h3>
   <ul class="steps">
     <li>Ask for your password. Sign-in happens on Microsoft's and Google's own pages.</li>
     <li>Send data anywhere. There is no backend, no telemetry, no licence check.</li>
-    <li>Read prompt or response text. Only metadata and grounded resource names.</li>
+    <li>Read prompt or response text, or the value of any API key.</li>
   </ul>
   <h3>Where reports are written</h3>
   <p class="muted small" id="aboutPath"></p>

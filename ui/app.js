@@ -73,10 +73,38 @@ const dom = {
   saveAsBtn: el('saveAsBtn'),
   folderBtn: el('folderBtn'),
   againBtn: el('againBtn'),
+
+  // Tabs
+  tabBtnAudit: el('tabBtnAudit'),
+  tabBtnScanner: el('tabBtnScanner'),
+  scanTabCount: el('scanTabCount'),
+  panelAudit: el('tab-audit'),
+  panelScanner: el('tab-scanner'),
+
+  // Scanner
+  scanRunStep: el('scanRunStep'),
+  scanBtn: el('scanBtn'),
+  scanDemoBtn: el('scanDemoBtn'),
+  scanProgressStep: el('scanProgressStep'),
+  scanProgressTitle: el('scanProgressTitle'),
+  scanProgressDetail: el('scanProgressDetail'),
+  scanCancelBtn: el('scanCancelBtn'),
+  scanConsole: el('scanConsole'),
+  scanResultStep: el('scanResultStep'),
+  scanHeadline: el('scanHeadline'),
+  sevRow: el('sevRow'),
+  findings: el('findings'),
+  scanAgainBtn: el('scanAgainBtn'),
 };
 
 let state = null;
 let lastReportPath = null;
+
+// Progress from the shared log sink is routed to whichever console is active —
+// the audit run or the scanner run — since both stream over the same channel.
+const auditLog = { console: dom.console, title: dom.progressTitle, detail: dom.progressDetail, purview: dom.purviewNotice };
+const scanLog = { console: dom.scanConsole, title: dom.scanProgressTitle, detail: dom.scanProgressDetail, purview: null };
+let activeLog = auditLog;
 
 // ---------------------------------------------------------------------------
 // Rendering
@@ -166,18 +194,19 @@ function showError(node, message) {
 let progressLine = null;
 
 function appendLog(entry) {
+  const t = activeLog;
   // Progress ticks replace their own line instead of stacking hundreds of
   // near-identical rows.
   if (entry.level === 'progress') {
     if (!progressLine) {
       progressLine = document.createElement('span');
       progressLine.className = 'l-progress';
-      dom.console.appendChild(progressLine);
-      dom.console.appendChild(document.createTextNode('\n'));
+      t.console.appendChild(progressLine);
+      t.console.appendChild(document.createTextNode('\n'));
     }
     progressLine.textContent = entry.message;
-    dom.progressDetail.textContent = entry.message;
-    dom.console.scrollTop = dom.console.scrollHeight;
+    t.detail.textContent = entry.message;
+    t.console.scrollTop = t.console.scrollHeight;
     return;
   }
 
@@ -186,20 +215,20 @@ function appendLog(entry) {
   const span = document.createElement('span');
   span.className = 'l-' + entry.level;
   span.textContent = entry.message;
-  dom.console.appendChild(span);
-  dom.console.appendChild(document.createTextNode('\n'));
-  dom.console.scrollTop = dom.console.scrollHeight;
+  t.console.appendChild(span);
+  t.console.appendChild(document.createTextNode('\n'));
+  t.console.scrollTop = t.console.scrollHeight;
 
   if (entry.level === 'step') {
-    dom.progressTitle.textContent = entry.message;
-    dom.progressDetail.textContent = 'Working…';
+    t.title.textContent = entry.message;
+    t.detail.textContent = 'Working…';
   }
   if (entry.level === 'info' || entry.level === 'ok') {
-    dom.progressDetail.textContent = entry.message;
+    t.detail.textContent = entry.message;
   }
   // The Purview wait is the one place people assume the app has frozen.
-  if (/Purview query created/i.test(entry.message)) {
-    dom.purviewNotice.hidden = false;
+  if (t.purview && /Purview query created/i.test(entry.message)) {
+    t.purview.hidden = false;
   }
 }
 
@@ -254,6 +283,7 @@ function setPhase(phase) {
 async function run(demo) {
   await saveSettings();
 
+  activeLog = auditLog;
   dom.console.textContent = '';
   progressLine = null;
   dom.purviewNotice.hidden = true;
