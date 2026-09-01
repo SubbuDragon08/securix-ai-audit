@@ -1,7 +1,7 @@
 {
   "name": "ai-audit-lens",
   "version": "0.1.0",
-  "description": "Zero-trust local desktop app and CLI that pulls Microsoft 365 Copilot and Google Gemini prompt audit logs from your own tenant and renders a single-file HTML dashboard. Nothing leaves the machine.",
+  "description": "Zero-trust local desktop app for IT and security leaders. Two tools in one: a tenant AI audit that pulls Microsoft 365 Copilot and Google Gemini prompt logs into an HTML dashboard, and a Shadow AI Scanner that finds unmanaged AI agents, MCP servers, and provider API keys on the machine. Nothing is sent to any third party.",
   "keywords": [
     "copilot",
     "gemini",

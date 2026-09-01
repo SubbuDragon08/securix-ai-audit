@@ -28,10 +28,19 @@ signed, by design.
 | Manual approval per release | ✅ | Workflow waits for your approval |
 | **Already released in signable form** | ⬜ | **Do this first — see below** |
 | **MFA on GitHub and SignPath** | ⬜ | **Your action** |
-| Not a hacking or pen-testing tool | ✅ | Read-only auditing of your own tenant |
+| Not a hacking or pen-testing tool | ✅ *(see note)* | Read-only auditing of your own tenant; the Shadow Scanner is **host-only** and read-only |
 | Actively maintained | ⬜ | Keep committing; a dead repo gets rejected |
 
 Two of these are on you, and one of them gates the rest.
+
+> **Note on the Shadow Scanner and eligibility.** The scanner shipping today is
+> **host-only**: it reads the current user's own AI configs and probes
+> `127.0.0.1`. It does no network reconnaissance and is read-only, so it does not
+> fall under SignPath's "hacking / pen-testing" exclusion. Describe it plainly in
+> your application. The **local-network sweep planned for a later version** is
+> different — an active subnet scan may not qualify for free signing, and would
+> move Windows to a paid certificate (Certum ~€30/yr or Azure Trusted Signing).
+> Confirm with SignPath before shipping that feature.
 
 ---
 

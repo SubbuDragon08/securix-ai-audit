@@ -419,6 +419,170 @@ document.addEventListener('click', (event) => {
 api.onLog(appendLog);
 
 // ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+
+function selectTab(which) {
+  const audit = which === 'audit';
+  dom.tabBtnAudit.setAttribute('aria-selected', String(audit));
+  dom.tabBtnScanner.setAttribute('aria-selected', String(!audit));
+  dom.panelAudit.hidden = !audit;
+  dom.panelScanner.hidden = audit;
+}
+
+dom.tabBtnAudit.addEventListener('click', () => selectTab('audit'));
+dom.tabBtnScanner.addEventListener('click', () => selectTab('scanner'));
+
+// ---------------------------------------------------------------------------
+// Shadow Scanner (Tab 2)
+// ---------------------------------------------------------------------------
+
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
+const CONTROL_LABEL = {
+  'llm-gateway': 'SecuriX LLM Gateway',
+  'mcp-gateway': 'SecuriX MCP Gateway',
+  both: 'SecuriX LLM + MCP Gateway',
+};
+
+function setScanPhase(phase) {
+  dom.scanRunStep.hidden = phase !== 'idle';
+  dom.scanProgressStep.hidden = phase !== 'running';
+  dom.scanResultStep.hidden = phase !== 'done';
+}
+
+/** Small DOM builder — everything is textContent, so finding strings (paths,
+    repo names, which are attacker-influenceable) can never inject markup. */
+function elc(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+async function runScan(demo) {
+  activeLog = scanLog;
+  dom.scanConsole.textContent = '';
+  progressLine = null;
+  dom.scanProgressTitle.textContent = demo ? 'Building sample findings' : 'Scanning this machine';
+  dom.scanProgressDetail.textContent = 'Starting…';
+  setScanPhase('running');
+
+  let result;
+  try {
+    result = await api.shadowScan({ demo: demo === true });
+  } catch (err) {
+    result = { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+
+  if (!result.ok) {
+    dom.scanHeadline.className = 'scan-headline';
+    dom.scanHeadline.textContent = result.error || 'The scan could not complete.';
+    dom.sevRow.textContent = '';
+    dom.findings.textContent = '';
+    setScanPhase('done');
+    return;
+  }
+
+  renderScanReport(result.report);
+  setScanPhase('done');
+}
+
+function renderScanReport(report) {
+  const c = report.counts;
+  const criticalHigh = c.critical + c.high;
+
+  dom.scanHeadline.className = 'scan-headline' + (report.findings.length === 0 ? ' clean' : '');
+  if (report.findings.length === 0) {
+    dom.scanHeadline.textContent =
+      'No shadow AI found on this machine. Run it on a developer workstation or a shared jump host for the fullest picture.';
+  } else if (criticalHigh > 0) {
+    dom.scanHeadline.textContent =
+      criticalHigh + ' critical or high-risk path' + (criticalHigh === 1 ? '' : 's') +
+      ' by which company data can reach an external AI provider — on this one machine.';
+  } else {
+    dom.scanHeadline.textContent =
+      report.findings.length + ' AI exposure' + (report.findings.length === 1 ? '' : 's') +
+      ' found on this machine.';
+  }
+
+  dom.sevRow.textContent = '';
+  for (const sev of SEVERITIES) {
+    const tile = elc('div', 'sev-tile c-' + sev);
+    tile.appendChild(elc('div', 'n', String(c[sev] || 0)));
+    tile.appendChild(elc('div', 'lbl', sev));
+    dom.sevRow.appendChild(tile);
+  }
+
+  if (criticalHigh > 0) {
+    dom.scanTabCount.textContent = String(criticalHigh);
+    dom.scanTabCount.hidden = false;
+  } else {
+    dom.scanTabCount.hidden = true;
+  }
+
+  dom.findings.textContent = '';
+  for (const f of report.findings) dom.findings.appendChild(buildFindingCard(f));
+}
+
+function buildFindingCard(f) {
+  const card = elc('div', 'finding c-' + f.severity);
+
+  const top = elc('div', 'finding-top');
+  top.appendChild(elc('h3', null, f.title));
+  top.appendChild(elc('span', 'sev-badge c-' + f.severity, f.severity));
+  card.appendChild(top);
+
+  card.appendChild(elc('p', 'finding-pathway', f.pathway));
+
+  if (f.dataDomains && f.dataDomains.length) {
+    const dz = elc('div', 'finding-domains');
+    for (const d of f.dataDomains) {
+      if (d === 'unknown') continue;
+      dz.appendChild(elc('span', 'domain', String(d).replace('-', ' ')));
+    }
+    if (dz.children.length) card.appendChild(dz);
+  }
+
+  if (f.evidence && f.evidence.length) {
+    const ul = elc('ul', 'finding-evidence');
+    for (const e of f.evidence) {
+      const li = elc('li');
+      li.appendChild(elc('span', 'loc', e.location));
+      if (e.detail) li.appendChild(document.createTextNode('  ·  ' + e.detail));
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+  }
+
+  const tools = elc('div', 'finding-tools');
+  tools.appendChild(elc('span', 'control-tag', CONTROL_LABEL[f.control] || 'SecuriX'));
+  if (f.rego) {
+    const toggle = elc('button', 'rego-toggle', 'Show draft policy');
+    const rego = elc('div', 'rego');
+    rego.hidden = true;
+    const pre = elc('pre');
+    pre.appendChild(elc('code', null, f.rego));
+    rego.appendChild(pre);
+    toggle.addEventListener('click', () => {
+      rego.hidden = !rego.hidden;
+      toggle.textContent = rego.hidden ? 'Show draft policy' : 'Hide draft policy';
+    });
+    tools.appendChild(toggle);
+    card.appendChild(tools);
+    card.appendChild(rego);
+  } else {
+    card.appendChild(tools);
+  }
+
+  return card;
+}
+
+dom.scanBtn.addEventListener('click', () => runScan(false));
+dom.scanDemoBtn.addEventListener('click', () => runScan(true));
+dom.scanCancelBtn.addEventListener('click', () => api.shadowCancel());
+dom.scanAgainBtn.addEventListener('click', () => setScanPhase('idle'));
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 
@@ -426,6 +590,8 @@ api.onLog(appendLog);
   state = await api.getState();
   dom.aboutPath.textContent = 'Your Documents folder, written with 0600 permissions.';
   setPhase('idle');
+  setScanPhase('idle');
+  selectTab('audit');
   render();
 })();
 

@@ -31,12 +31,12 @@
 const PLACEHOLDER_CLIENT_ID = 'REPLACE_WITH_SECURIX_ENTRA_CLIENT_ID';
 
 export const BRAND = {
-  appName: 'SecuriX AI Audit',
-  shortName: 'AI Audit',
+  appName: 'SecuriX AI Audit & Shadow Scanner',
+  shortName: 'SecuriX',
   vendor: 'SecuriX',
   website: 'https://securix.app',
-  /** Shown in the report footer and the app's About line. */
-  tagline: 'Free AI prompt audit for Microsoft 365 and Google Workspace',
+  /** Shown in the app header, the report footer, and the About line. */
+  tagline: 'Audit sanctioned AI, and expose the shadow AI that bypasses it.',
 } as const;
 
 /**

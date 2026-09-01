@@ -1,8 +1,15 @@
 # Planning — Shadow AI & Agent Surface Scanner (Tab 2)
 
 Architectural plan for adding a **Shadow AI & Agent Surface Scanner** as a second
-tab in the existing SecuriX AI Audit desktop app. **No code yet** — this is for
-approval first, per the build process.
+tab in the existing SecuriX AI Audit desktop app.
+
+> **Status (implemented):** Phases 1 and 2 are built, tested, and wired into the
+> app. `src/shadow/` holds the detectors + orchestrator (unit-tested by
+> `test/shadow-scanner.test.mjs`, including the "never leak a key value"
+> invariant); Tab 2 renders findings, severity tiles, draft Rego previews, and
+> the SecuriX CTA in the SecuriX brand theme. Approved decisions: bounded
+> key-scan; SecuriX-branded report look; host scan first, the **local /24 sweep
+> (Phase 4) is deferred** to a later version behind its consent gate.
 
 Goal: let a CISO / Head of IT run one click and *see the concrete pathways by
 which their IP and client data can leak to external AI providers* on a machine
@@ -220,11 +227,11 @@ Signing. Not a blocker; just no longer the free path.
 
 ## 7. Proposed build phases (each independently shippable & testable)
 
-1. **Types + host scan (Layers A+B)** — `types.ts`, `mcpConfigs.ts`, `credentials.ts`, `footprint.ts`, `localPorts.ts`, `scanner.ts` + fixtures/tests. Pure `src/`, no UI yet. *This alone is a working, valuable scanner.*
-2. **UI: tab bar + host-scan dashboard** — wire IPC, render findings, severity grouping.
-3. **Rego drafts + HTML report export + SecuriX CTAs** — the bridge.
-4. **Layer C network sweep** — consent gate, throttled `/24`, fingerprinting, abort. Gated last so 1–3 are provably safe first.
-5. **Signing/packaging update** — paid-cert path, docs.
+1. ✅ **Types + host scan (Layers A+B)** — `types.ts`, `mcpConfigs.ts`, `credentials.ts`, `footprint.ts`, `localPorts.ts`, `scanner.ts` + fixtures/tests. Pure `src/`. Done, 9 tests green.
+2. ✅ **UI: tab bar + host-scan dashboard + Rego drafts + SecuriX CTA** — IPC wired, findings rendered by severity, draft Rego previews inline, SecuriX brand theme adopted from the marketing site. Done.
+3. ⏭ **HTML risk-report export** — a shareable single-file "Agent Risk Report" the CISO forwards internally (the lead loop). *Fast-follow.*
+4. ⏭ **Layer C network sweep** — consent gate, throttled `/24`, fingerprinting, abort. Gated last so 1–3 are provably safe first.
+5. ⏭ **Signing/packaging update** — the host-only scanner shipping now is read-only and does no network reconnaissance, so it likely stays SignPath-eligible. The **local-network sweep in Phase 4** is what would disqualify free signing and move Windows to a ~€30/yr paid cert. Confirm with SignPath before shipping Phase 4.
 
 ---
 

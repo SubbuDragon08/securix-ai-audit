@@ -37,6 +37,31 @@ npm run cli -- --demo
 
 ---
 
+## The Shadow Scanner (no credentials, no `.env`)
+
+The Shadow Scanner is desktop-only. In the app, switch to the **Shadow Scanner**
+tab:
+
+- **Preview with sample findings** — renders a rich synthetic report (critical MCP
+  server, filesystem exposure, a provider key, a live localhost server, …) so you
+  can see the dashboard on a clean machine. No disk or network access.
+- **Run scan** — actually inspects *this* machine: your own AI-client MCP configs,
+  dotfiles for provider keys (name + path only, never the value), and localhost.
+  On a developer box you'll see real findings; on a clean admin laptop you may see
+  only the AI tools you have installed. Both are correct.
+
+The detection logic is unit-tested with no machine state:
+
+```bash
+npm test        # builds, then runs node:test — audit + shadow scanner (30 tests)
+```
+
+The shadow suite (`test/shadow-scanner.test.mjs`) proves the classification and,
+critically, the **privacy invariant**: a test fails the build if any secret value
+from a fixture ever appears in scanner output.
+
+---
+
 ## Level 1 — real Google Workspace data (no `.env` needed)
 
 Google is bring-your-own-client, and you paste the two values **into the app's UI**,

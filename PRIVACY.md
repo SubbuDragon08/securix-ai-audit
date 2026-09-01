@@ -1,19 +1,21 @@
 # Privacy policy
 
-**SecuriX AI Audit collects no data whatsoever.**
+**SecuriX AI Audit & Shadow Scanner collects no data whatsoever.**
 
 There is no backend service, no analytics, no telemetry, no crash reporting, no
 update check, and no licence check. The application never contacts SecuriX or
-any host operated by us. Nothing about you, your tenant, or your usage is
-transmitted anywhere.
+any host operated by us. Nothing about you, your tenant, your machine, or your
+usage is transmitted anywhere.
 
 This is verifiable rather than merely asserted — see *How to check* below.
 
-## What the application does with your data
+The app has two tools; each is covered below.
 
-The tool reads AI prompt audit logs from **your own** Microsoft 365 or Google
-Workspace tenant, using **your own** administrator credentials, and writes an
-HTML report to **your own** disk. Every step happens on the machine you run it
+## Tool 1 — Tenant Audit
+
+The Tenant Audit reads AI prompt audit logs from **your own** Microsoft 365 or
+Google Workspace tenant, using **your own** administrator credentials, and writes
+an HTML report to **your own** disk. Every step happens on the machine you run it
 on.
 
 | Data | Where it goes |
@@ -23,6 +25,30 @@ on.
 | OAuth access and refresh tokens | Process memory. Discarded on exit unless you tick **Stay signed in**, which stores them encrypted in your OS keychain (macOS Keychain, Windows DPAPI, Linux libsecret) |
 | Your Google OAuth client id and secret | A local settings file readable only by your user account |
 | Prompt and response text | **Never read.** The tool requests only metadata: who, when, from which app, and which files the assistant opened |
+
+## Tool 2 — Shadow AI & Agent Scanner
+
+The Shadow Scanner runs entirely on the machine you launch it on. It reads the
+current user's own AI-client configuration files and dotfiles, and probes the
+loopback address (`127.0.0.1`) to fingerprint local servers. It contacts **no
+network host at all**, touches **no other machine**, and writes nothing to disk
+unless you choose to save a report.
+
+| Data | How it is handled |
+|---|---|
+| AI client MCP configs (Claude, Cursor, VS Code, …) | Read from your home directory to list the servers declared and what they can reach. Held in memory for the on-screen results only. |
+| Provider API keys in dotfiles / `.env` files | The tool records that a key **exists**, which provider it is, and the file it lives in. **It never reads, stores, displays, or transmits the secret value.** The matcher keys on the variable *name* only. |
+| Localhost ports | Enumerated for your own user's processes and probed at `127.0.0.1` to detect MCP servers. No other address is contacted. |
+| Installed AI tools | Detected by the presence of app bundles / config directories. |
+| Scan results | Displayed in the app. Nothing is sent anywhere; nothing is written to disk unless you export a report. |
+
+The "never read a key value" rule is not just a promise — it is enforced by an
+automated test (`test/shadow-scanner.test.mjs`) that fails the build if any
+secret value from a fixture ever appears in scanner output.
+
+The Shadow Scanner does **not** scan your local network in this version. A future
+version may add an opt-in local-subnet scan, and it will require you to
+explicitly confirm you are authorised to scan that network before it runs.
 
 ## Hosts the application contacts
 

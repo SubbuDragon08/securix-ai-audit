@@ -60,6 +60,17 @@ Signed files carry `ProductName`, `CompanyName`, and `FileVersion` metadata
 matching this project and the released version, so that enterprise allow-listing
 (AppLocker or WDAC publisher rules) can target them precisely.
 
+## What the application does
+
+Two read-only tools for IT and security administrators: a **Tenant Audit** that
+reads the administrator's own Microsoft 365 / Google Workspace AI audit logs over
+documented vendor APIs, and a **Shadow AI Scanner** that inspects the local
+machine — the current user's own AI-client configuration files and its own
+loopback interface — to inventory unmanaged AI agents, MCP servers, and the
+presence of AI provider API keys. The scanner is host-only, touches no other
+machine, and never reads the value of any credential. Neither tool contains
+exploitation, credential-harvesting, or penetration-testing capability.
+
 ## Privacy
 
 This application collects nothing. It has no backend, no telemetry, no update

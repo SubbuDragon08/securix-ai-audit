@@ -1,12 +1,17 @@
-# SecuriX AI Audit
+# SecuriX AI Audit & Shadow Scanner
 
-**See every Copilot and Gemini prompt in your tenant — without sending a single byte to anyone.**
+**See the AI you sanctioned — and the AI you didn't — without sending a single byte to anyone.**
 
-A free, open-source desktop app for enterprise IT admins. It signs into *your* Microsoft 365
-or Google Workspace tenant with *your* admin credentials, pulls the AI prompt audit logs, and
-writes a self-contained HTML dashboard to your Documents folder.
+A free, open-source desktop app for IT and security leaders. Two tools in one window:
 
-Ships as a `.dmg` and a `.exe`. There is also a CLI for people who prefer one.
+1. **Tenant Audit** — signs into *your* Microsoft 365 or Google Workspace tenant with *your*
+   admin credentials, pulls the Copilot / Gemini prompt audit logs, and writes a
+   self-contained HTML dashboard to your Documents folder.
+2. **Shadow AI & Agent Scanner** — with one click, finds the unmanaged AI agents, MCP
+   servers, and provider API keys **on the machine** that can move company data to external
+   models with no gateway, policy, or audit in between.
+
+Ships as a `.dmg`, a `.exe`, and Linux packages. There is also a CLI for the audit half.
 
 ![The app](docs/app-connect.png)
 
@@ -22,18 +27,52 @@ Ships as a `.dmg` and a `.exe`. There is also a CLI for people who prefer one.
 
 ## Why this exists
 
-Most organisations turned on Microsoft 365 Copilot or Gemini for Workspace without a
-way to answer three questions their auditors are about to ask:
+Most organisations turned on Copilot or Gemini — and let their engineers wire up AI
+agents and MCP servers — without a way to answer the questions their auditors are about
+to ask:
 
-1. **Who is actually using it?** License counts are not usage.
+1. **Who is actually using sanctioned AI?** Licence counts are not usage. *(Tenant Audit)*
 2. **What tenant data is the assistant reading?** Copilot grounds answers on SharePoint,
-   OneDrive, and mailbox content — the audit log names those files.
+   OneDrive, and mailbox content — the audit log names those files. *(Tenant Audit)*
 3. **Is it touching classified material?** Sensitivity labels on grounded resources are
-   in the log, and nobody is looking at them.
+   in the log, and nobody is looking at them. *(Tenant Audit)*
+4. **What AI did we *not* sanction?** Which developers have an MCP server exposing a
+   production database to Claude, or a raw OpenAI key in a dotfile, bypassing every control
+   the audit above can see? *(Shadow Scanner)*
 
-The data is already in Purview and the Admin SDK. The gap is that getting at it means
-an async Graph API, a paginated Reports API, and a spreadsheet afternoon. This closes
-that gap in one command.
+The data is already there — in Purview, the Admin SDK, and the AI clients' own config
+files. The gap is that getting at it means an async Graph API, a paginated Reports API,
+and reading a dozen tool configs by hand. This closes that gap in two clicks.
+
+## The Shadow AI & Agent Scanner
+
+The Tenant Audit shows the AI your tenant *knows about*. The Shadow Scanner shows the AI
+it doesn't. Click **Run scan** and it inspects **this machine** — a developer workstation
+or a shared jump host — for the concrete pathways by which IP and client data leaks to
+external models:
+
+- **MCP server configurations** in every installed AI client (Claude Desktop, Cursor,
+  Windsurf, VS Code, Claude Code, …) — and *what each server can reach*: a filesystem
+  path, a database DSN, a GitHub token, a browser. An MCP server pointing at
+  `prod-db.internal` is flagged **critical**, because your customer data is one prompt from
+  leaving your control.
+- **Direct provider API keys** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) present in
+  dotfiles and `.env` files — ungoverned egress with no DLP or audit. It records that a
+  key *exists* and where; **it never reads the value**.
+- **Live MCP servers** listening on `localhost` right now, fingerprinted for the protocol.
+- **AI tools and agent frameworks** installed on the host.
+
+Each finding names the data-leak pathway, its severity, and the SecuriX control that
+closes it, with a **draft** Open Policy Agent (Rego) preview. It is read-only, touches no
+other machine, and sends nothing anywhere. *(Scanning your local network for exposed
+agents is a later version, behind an explicit "I am authorised to scan this network"
+step.)*
+
+The scanner's whole job is to make the risk **visible** — and the fix is
+[SecuriX](https://securix.app): an LLM Gateway and a managed MCP Gateway that put every one
+of those pathways behind central policy, DLP, and audit.
+
+![The Shadow AI & Agent Scanner](docs/shadow-scanner.png)
 
 ## Zero-trust by construction
 
@@ -49,6 +88,7 @@ This tool is asking for audit-read across your whole tenant, so it should have t
 | **No prompt content** | Prompt and response bodies are never mapped into the report. `--include-raw` attaches full payloads to the `--json` stream only; the HTML never embeds them. |
 | **Hardened renderer** | The UI runs `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`, behind a CSP with `connect-src 'none'` — it cannot make a network request or touch the filesystem. Every outbound call originates in the main process against a fixed host list. |
 | **OAuth in the real browser** | Sign-in opens your system browser, never an embedded webview. You can see the address bar and verify you are on `login.microsoftonline.com`. Embedded-webview OAuth is the phishing pattern, and Google blocks it outright. |
+| **The scanner is local and read-only** | The Shadow Scanner reads only the current user's own AI configs and dotfiles and probes `127.0.0.1`. It touches no other machine, sends nothing anywhere, and **never reads the value of an API key** — only that one exists and where. That invariant is enforced by a test ([`test/shadow-scanner.test.mjs`](test/shadow-scanner.test.mjs)) that fails if any secret value reaches the output. |
 | **Zero dependencies** | The runtime `dependencies` block in `package.json` is empty — Electron and the build tooling are dev dependencies. Nothing to audit but this repo. |
 
 The generated HTML embeds your audit records, so it is written `0600` and should be
@@ -178,14 +218,19 @@ click *Preview with sample data*. No credentials, no `.env`, no network.
 **Publishing this as a lead magnet?** [DISTRIBUTION.md](DISTRIBUTION.md) covers the Entra
 registration, code signing and notarization, and the website download flow.
 
+The **Shadow Scanner** is desktop-only — open the app and switch to the **Shadow
+Scanner** tab, then click **Run scan** (or **Preview with sample findings** to see it
+with no real AI on the machine).
+
 ### CLI
 
 ```bash
 npx ai-audit-lens --demo          # preview with synthetic data
 ```
 
-The CLI requires its own Entra app registration (walkthrough below) because it is not
-distributed with SecuriX's client id.
+The CLI covers the **Tenant Audit** only (the Shadow Scanner is GUI-only). It requires
+its own Entra app registration (walkthrough below) because it is not distributed with
+SecuriX's client id.
 
 ---
 
@@ -480,6 +525,16 @@ src/               core — shared by both front ends, no Electron imports
   types.ts         Shared domain types
   index.ts         CLI front end: arg parsing and terminal presentation only
 
+src/shadow/        Shadow AI & Agent Scanner — pure, unit-tested, no Electron
+  scanner.ts       orchestrator: composes the detectors into one ScanReport
+  mcpConfigs.ts    the headline detector — MCP client-config discovery
+  credentials.ts   provider-key presence (name + path only, never the value)
+  footprint.ts     installed AI tools / agent frameworks (indicative)
+  localPorts.ts    localhost listener enumeration + MCP fingerprint
+  rego.ts          draft OPA Rego previews per finding
+  demo.ts          synthetic findings for the scanner's Preview button
+  types.ts         Finding, Severity, ScanReport, DataDomain
+
 electron/
   main.ts          Window, hardening, IPC handlers, keychain session store
   preload.ts       The contextBridge trust boundary
@@ -494,16 +549,18 @@ scripts/
   build-binaries.mjs bun cross-compile for the CLI
 ```
 
-Both front ends call the same `runAudit()` in `src/run.ts`, so the GUI and the CLI
-cannot drift apart on partial failures, deadlines, or redaction.
+Both audit front ends call the same `runAudit()` in `src/run.ts`; the Shadow Scanner
+runs `runShadowScan()` in `src/shadow/scanner.ts`. Both keep their logic in pure `src/`
+modules the Electron main process drives over IPC, so the security-sensitive work is
+unit-tested with no live machine and the sandboxed renderer only renders.
 
 ```bash
 npm run typecheck   # tsc --noEmit across src/ + electron/
+npm test            # build + node:test (audit + shadow scanner)
 npm run app         # build and launch the desktop app
 npm run dist:mac    # -> release/*.dmg
 npm run dist:win    # -> release/*.exe
 npm run build       # -> dist/ (ESM CLI, what npx runs)
-npm run bundle      # -> dist-cjs/ai-audit-lens.cjs (CJS, for SEA/pkg)
 npm run cli -- --demo
 ```
 

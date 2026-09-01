@@ -143,14 +143,16 @@
 
   <header>
     <span class="eyebrow">Free tool</span>
-    <h1>Find out what your employees are telling Copilot.</h1>
+    <h1>See the AI you sanctioned — and the AI you didn't.</h1>
     <p class="lead">
-      A free desktop app that reads your own Microsoft 365 or Google Workspace audit
-      logs and shows you every AI prompt in the last 7 days — who, when, from which
-      app, and which internal files the assistant opened to answer.
+      A free desktop app for IT and security leaders, with two tools in one window.
+      <strong>Audit</strong> your Microsoft 365 or Google Workspace tenant to see every
+      Copilot and Gemini prompt — who, when, and which internal files the assistant opened.
+      Then <strong>scan a machine</strong> for the shadow AI that bypasses all of it:
+      unmanaged agents, MCP servers wired to your databases, and raw API keys in dotfiles.
     </p>
     <p class="lead" style="margin-top:-4px">
-      It runs entirely on your laptop. Nothing is sent to SecuriX.
+      It runs entirely on your own machine. Nothing is sent to SecuriX.
     </p>
   </header>
 
@@ -198,10 +200,10 @@
 
   <!-- ================= What you get ================= -->
   <section>
-    <h2>What you get</h2>
+    <h2>1 &middot; Tenant Audit</h2>
     <p class="muted" style="max-width:62ch">
-      One self-contained HTML report, written to your Documents folder. Open it,
-      email it, attach it to a ticket.
+      A self-contained HTML report of your sanctioned AI, written to your Documents
+      folder. Open it, email it, attach it to a ticket.
     </p>
     <img class="shot" alt="The generated dashboard: interactions over time, top users, most-read tenant files, and sensitivity exposure."
          src="https://raw.githubusercontent.com/SubbuDragon08/securix-ai-audit/master/docs/screenshot.png">
@@ -220,6 +222,34 @@
         <p class="muted small">Sensitivity labels on those files, resolved to real names, with the share of prompts that hit them.</p>
       </div>
     </div>
+  </section>
+
+  <!-- ================= Shadow scanner ================= -->
+  <section>
+    <h2>2 &middot; Shadow AI &amp; Agent Scanner</h2>
+    <p class="muted" style="max-width:62ch">
+      The audit shows the AI your tenant knows about. One click on the Shadow Scanner
+      shows the AI it doesn't — the unmanaged agents and MCP servers on a developer's
+      machine that route company data straight to external models, with no gateway,
+      policy, or audit in between.
+    </p>
+    <div class="grid-3" style="margin-top:24px">
+      <div class="card">
+        <h3>MCP servers exposing your data</h3>
+        <p class="muted small">Finds MCP servers wired to Claude, Cursor and others — and what each can reach. One pointing at a production database is flagged critical.</p>
+      </div>
+      <div class="card">
+        <h3>Ungoverned API keys</h3>
+        <p class="muted small">Detects raw OpenAI / Anthropic keys in dotfiles and <code>.env</code> files — direct egress with no DLP. It records that a key exists, never its value.</p>
+      </div>
+      <div class="card">
+        <h3>A path to control</h3>
+        <p class="muted small">Every finding names the leak pathway, its severity, and a draft Open Policy Agent (Rego) rule showing how a gateway would close it.</p>
+      </div>
+    </div>
+    <p class="muted small" style="margin-top:16px">
+      Read-only. Runs on one machine, touches no other, and sends nothing anywhere.
+    </p>
   </section>
 
   <!-- ================= Trust ================= -->
@@ -318,11 +348,13 @@ shasum -a 256 -c SHA256SUMS.txt</code></pre>
   <!-- ================= CTA ================= -->
   <section>
     <div class="card" style="text-align:center">
-      <h2>This shows sanctioned AI only</h2>
-      <p class="muted" style="max-width:56ch;margin:0 auto 18px">
-        Your report covers Copilot and Gemini — the AI your tenant knows about. It cannot
-        see ChatGPT, Claude, Cursor, or coding agents on personal accounts, because none
-        of that touches your audit log. That gap is what SecuriX closes.
+      <h2>Seeing the risk is step one. Controlling it is SecuriX.</h2>
+      <p class="muted" style="max-width:58ch;margin:0 auto 18px">
+        This tool makes the exposure visible — the prompts, the MCP servers, the keys.
+        SecuriX is how you take back control: an <strong>LLM Gateway</strong> and a
+        <strong>managed MCP Gateway</strong> that put every AI request and every agent
+        tool call behind central policy, DLP, and audit — enforced in Draft-Only mode
+        first, so nothing breaks.
       </p>
       <a class="btn" href="/">See how SecuriX works</a>
     </div>
